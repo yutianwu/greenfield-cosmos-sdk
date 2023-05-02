@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 
 	"cosmossdk.io/log"
 	"cosmossdk.io/store/prefix"
@@ -15,8 +16,10 @@ import (
 	xp "cosmossdk.io/x/upgrade/exported"
 	"cosmossdk.io/x/upgrade/types"
 
+	"github.com/armon/go-metrics"
 	"github.com/cosmos/cosmos-sdk/codec"
 	serverconfig "github.com/cosmos/cosmos-sdk/server/config"
+	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/kv"
 	"github.com/cosmos/cosmos-sdk/types/module"
@@ -49,6 +52,13 @@ func NewKeeper(storeKey storetypes.StoreKey, cdc codec.BinaryCodec, homePath str
 		upgradeConfig:      types.NewUpgradeConfig(),
 		versionSetter:      vs,
 	}
+
+	// todo: check with dylan
+	//if upgradePlan, err := k.ReadUpgradeInfoFromDisk(); err == nil && upgradePlan.Height > 0 {
+	//	telemetry.SetGaugeWithLabels([]string{"server", "info"}, 1, []metrics.Label{telemetry.NewLabel("upgrade_height", strconv.FormatInt(upgradePlan.Height, 10))})
+	//}
+	//
+	//return k
 }
 
 // SetVersionSetter sets the interface implemented by baseapp which allows setting baseapp's protocol version field
@@ -194,6 +204,8 @@ func (k Keeper) ScheduleUpgrade(ctx sdk.Context, plan types.Plan) error {
 	}
 
 	k.upgradeConfig.SetPlan(&plan)
+
+	telemetry.SetGaugeWithLabels([]string{"server", "info"}, 1, []metrics.Label{telemetry.NewLabel("upgrade_height", strconv.FormatInt(plan.Height, 10))})
 
 	return nil
 }

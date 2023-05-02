@@ -8,16 +8,11 @@ import (
 	"cosmossdk.io/depinject"
 	"cosmossdk.io/log"
 	sdkmath "cosmossdk.io/math"
+	store "cosmossdk.io/store/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmtjson "github.com/cometbft/cometbft/libs/json"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	dbm "github.com/cosmos/cosmos-db"
-	"github.com/stretchr/testify/require"
-
-	authzkeeper "github.com/cosmos/cosmos-sdk/x/authz/keeper"
-
-	store "cosmossdk.io/store/types"
-
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	baseapptestutil "github.com/cosmos/cosmos-sdk/baseapp/testutil"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -36,10 +31,12 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 	xauthsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
+	authzkeeper "github.com/cosmos/cosmos-sdk/x/authz/keeper"
 	_ "github.com/cosmos/cosmos-sdk/x/authz/module" // import consensus as a blank
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
+	"github.com/stretchr/testify/require"
 )
 
 var blockMaxGas = uint64(simtestutil.DefaultConsensusParams.Block.MaxGas)
@@ -88,15 +85,19 @@ func TestBaseApp_BlockGas(t *testing.T) {
 			err               error
 		)
 
-		err = depinject.Inject(configurator.NewAppConfig(
-			configurator.AuthModule(),
-			configurator.AuthzModule(),
-			configurator.TxModule(),
-			configurator.ParamsModule(),
-			configurator.ConsensusModule(),
-			configurator.BankModule(),
-			configurator.StakingModule(),
-		),
+		err = depinject.Inject(
+			depinject.Configs(
+				configurator.NewAppConfig(
+					configurator.AuthModule(),
+					configurator.AuthzModule(),
+					configurator.TxModule(),
+					configurator.ParamsModule(),
+					configurator.ConsensusModule(),
+					configurator.BankModule(),
+					configurator.StakingModule(),
+				),
+				depinject.Supply(log.NewNopLogger()),
+			),
 			&bankKeeper,
 			&accountKeeper,
 			&authzKeeper,
@@ -107,7 +108,7 @@ func TestBaseApp_BlockGas(t *testing.T) {
 			&appBuilder)
 		require.NoError(t, err)
 
-		bapp := appBuilder.Build(log.NewNopLogger(), dbm.NewMemDB(), nil, baseapp.SetChainID(testutil.DefaultChainId))
+		bapp := appBuilder.Build(dbm.NewMemDB(), nil, baseapp.SetChainID(testutil.DefaultChainId))
 		err = bapp.Load(true)
 		require.NoError(t, err)
 
@@ -200,6 +201,10 @@ func TestBaseApp_BlockGas(t *testing.T) {
 }
 
 func createTestTx(txConfig client.TxConfig, txBuilder client.TxBuilder, privs []cryptotypes.PrivKey, accNums, accSeqs []uint64, chainID string) (xauthsigning.Tx, []byte, error) {
+	defaultSignMode, err := xauthsigning.APISignModeToInternal(txConfig.SignModeHandler().DefaultMode())
+	if err != nil {
+		return nil, nil, err
+	}
 	// First round: we gather all the signer infos. We use the "set empty
 	// signature" hack to do that.
 	var sigsV2 []signing.SignatureV2
@@ -207,7 +212,7 @@ func createTestTx(txConfig client.TxConfig, txBuilder client.TxBuilder, privs []
 		sigV2 := signing.SignatureV2{
 			PubKey: priv.PubKey(),
 			Data: &signing.SingleSignatureData{
-				SignMode:  txConfig.SignModeHandler().DefaultMode(),
+				SignMode:  defaultSignMode,
 				Signature: nil,
 			},
 			Sequence: accSeqs[i],
@@ -215,7 +220,7 @@ func createTestTx(txConfig client.TxConfig, txBuilder client.TxBuilder, privs []
 
 		sigsV2 = append(sigsV2, sigV2)
 	}
-	err := txBuilder.SetSignatures(sigsV2...)
+	err = txBuilder.SetSignatures(sigsV2...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -228,9 +233,10 @@ func createTestTx(txConfig client.TxConfig, txBuilder client.TxBuilder, privs []
 			ChainID:       chainID,
 			AccountNumber: accNums[i],
 			Sequence:      accSeqs[i],
+			PubKey:        priv.PubKey(),
 		}
 		sigV2, err := tx.SignWithPrivKey(
-			nil, txConfig.SignModeHandler().DefaultMode(), signerData, //nolint:staticcheck
+			context.TODO(), defaultSignMode, signerData,
 			txBuilder, priv, txConfig, accSeqs[i])
 		if err != nil {
 			return nil, nil, err

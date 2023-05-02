@@ -5,11 +5,12 @@ import (
 	"strconv"
 	"strings"
 
+	"cosmossdk.io/core/address"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/spf13/cobra"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/version"
 	gcutils "github.com/cosmos/cosmos-sdk/x/gov/client/utils"
 	"github.com/cosmos/cosmos-sdk/x/gov/types"
@@ -17,7 +18,7 @@ import (
 )
 
 // GetQueryCmd returns the cli query commands for this module
-func GetQueryCmd() *cobra.Command {
+func GetQueryCmd(ac address.Codec) *cobra.Command {
 	// Group gov queries under a subcommand
 	govQueryCmd := &cobra.Command{
 		Use:                        types.ModuleName,
@@ -29,8 +30,8 @@ func GetQueryCmd() *cobra.Command {
 
 	govQueryCmd.AddCommand(
 		GetCmdQueryProposal(),
-		GetCmdQueryProposals(),
-		GetCmdQueryVote(),
+		GetCmdQueryProposals(ac),
+		GetCmdQueryVote(ac),
 		GetCmdQueryVotes(),
 		GetCmdQueryParams(),
 		GetCmdQueryParam(),
@@ -93,7 +94,7 @@ $ %s query gov proposal 1
 
 // GetCmdQueryProposals implements a query proposals command. Command to Get
 // Proposals Information.
-func GetCmdQueryProposals() *cobra.Command {
+func GetCmdQueryProposals(ac address.Codec) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "proposals",
 		Short: "Query proposals with optional filters",
@@ -181,7 +182,7 @@ $ %s query gov proposals --page=2 --limit=100
 
 // GetCmdQueryVote implements the query proposal vote command. Command to Get a
 // Vote Information.
-func GetCmdQueryVote() *cobra.Command {
+func GetCmdQueryVote(ac address.Codec) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vote [proposal-id] [voter-addr]",
 		Args:  cobra.ExactArgs(2),

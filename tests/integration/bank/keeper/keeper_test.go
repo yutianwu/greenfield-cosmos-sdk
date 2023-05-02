@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -8,10 +9,13 @@ import (
 	"time"
 
 	authmodulev1 "cosmossdk.io/api/cosmos/auth/module/v1"
+	"cosmossdk.io/depinject"
+	"cosmossdk.io/log"
 	"cosmossdk.io/math"
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	cmttime "github.com/cometbft/cometbft/types/time"
+	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/assert"
 
 	storetypes "cosmossdk.io/store/types"
@@ -20,7 +24,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
-	"github.com/cosmos/cosmos-sdk/testutil"
 	"github.com/cosmos/cosmos-sdk/testutil/configurator"
 	"github.com/cosmos/cosmos-sdk/testutil/sims"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -90,7 +93,6 @@ func newBarCoin(amt int64) sdk.Coin {
 	return sdk.NewInt64Coin(barDenom, amt)
 }
 
-// nolint: interfacer
 func getCoinsByName(ctx sdk.Context, bk keeper.Keeper, ak types.AccountKeeper, moduleName string) sdk.Coins {
 	moduleAddress := ak.GetModuleAddress(moduleName)
 	macc := ak.GetAccount(ctx, moduleAddress)
@@ -120,14 +122,17 @@ func initFixture(t assert.TestingT) *fixture {
 	var interfaceRegistry codectypes.InterfaceRegistry
 
 	app, err := sims.Setup(
-		configurator.NewAppConfig(
-			configurator.AuthModule(),
-			configurator.AuthzModule(),
-			configurator.BankModule(),
-			configurator.StakingModule(),
-			configurator.ParamsModule(),
-			configurator.ConsensusModule(),
-			configurator.VestingModule()),
+		depinject.Configs(
+			configurator.NewAppConfig(
+				configurator.AuthModule(),
+				configurator.AuthzModule(),
+				configurator.BankModule(),
+				configurator.StakingModule(),
+				configurator.ParamsModule(),
+				configurator.ConsensusModule(),
+				configurator.VestingModule()),
+			depinject.Supply(log.NewNopLogger()),
+		),
 		&f.accountKeeper, &f.bankKeeper, &f.stakingKeeper,
 		&f.appCodec, &f.authConfig, &interfaceRegistry,
 	)
@@ -167,8 +172,10 @@ func initKeepersWithmAccPerms(f *fixture, blockedAddrs map[string]bool) (authkee
 		appCodec, storeService, authtypes.ProtoBaseAccount,
 		maccPerms, authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
+
+	bankStoreService := runtime.NewKVStoreService(f.fetchStoreKey(types.StoreKey).(*storetypes.KVStoreKey))
 	bankKeeper := keeper.NewBaseKeeper(
-		appCodec, f.fetchStoreKey(types.StoreKey), authKeeper, blockedAddrs, authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		appCodec, bankStoreService, authKeeper, blockedAddrs, authtypes.NewModuleAddress(govtypes.ModuleName).String(), log.NewNopLogger(),
 	)
 
 	return authKeeper, bankKeeper
@@ -245,16 +252,16 @@ func TestSupply_SendCoins(t *testing.T) {
 	authKeeper.SetModuleAccount(ctx, burnerAcc)
 	authKeeper.SetAccount(ctx, baseAcc)
 
-	testutil.AssertPanics(t, func() {
-		_ = keeper.SendCoinsFromModuleToModule(ctx, "", holderAcc.GetName(), initCoins) // nolint:errcheck
+	require.Panics(t, func() {
+		_ = keeper.SendCoinsFromModuleToModule(ctx, "", holderAcc.GetName(), initCoins) //nolint:errcheck // no error check is needed because we are testing for a panic
 	})
 
-	testutil.AssertPanics(t, func() {
-		_ = keeper.SendCoinsFromModuleToModule(ctx, authtypes.Burner, "", initCoins) // nolint:errcheck
+	require.Panics(t, func() {
+		_ = keeper.SendCoinsFromModuleToModule(ctx, authtypes.Burner, "", initCoins) //nolint:errcheck // no error check is needed because we are testing for a panic
 	})
 
-	testutil.AssertPanics(t, func() {
-		_ = keeper.SendCoinsFromModuleToAccount(ctx, "", baseAcc.GetAddress(), initCoins) // nolint:errcheck
+	require.Panics(t, func() {
+		_ = keeper.SendCoinsFromModuleToAccount(ctx, "", baseAcc.GetAddress(), initCoins) //nolint:errcheck // no error check is needed because we are testing for a panic
 	})
 
 	assert.Error(t,
@@ -297,14 +304,14 @@ func TestSupply_MintCoins(t *testing.T) {
 	assert.NilError(t, err)
 
 	// no module account
-	testutil.AssertPanics(t, func() { keeper.MintCoins(ctx, "", initCoins) }) // nolint:errcheck
+	require.Panics(t, func() { keeper.MintCoins(ctx, "", initCoins) }) //nolint:errcheck // we're testing for a panic
 	// invalid permission
-	testutil.AssertPanics(t, func() { keeper.MintCoins(ctx, authtypes.Burner, initCoins) }) // nolint:errcheck
+	require.Panics(t, func() { keeper.MintCoins(ctx, authtypes.Burner, initCoins) }) //nolint:errcheck // we're testing for a panic
 
 	err = keeper.MintCoins(ctx, authtypes.Minter, sdk.Coins{sdk.Coin{Denom: "denom", Amount: sdk.NewInt(-10)}})
 	assert.Error(t, err, fmt.Sprintf("%sdenom: invalid coins", sdk.NewInt(-10)))
 
-	testutil.AssertPanics(t, func() { keeper.MintCoins(ctx, randomPerm, initCoins) }) // nolint:errcheck
+	require.Panics(t, func() { keeper.MintCoins(ctx, randomPerm, initCoins) }) //nolint:errcheck // we're testing for a panic
 
 	err = keeper.MintCoins(ctx, authtypes.Minter, initCoins)
 	assert.NilError(t, err)
@@ -326,7 +333,7 @@ func TestSupply_MintCoins(t *testing.T) {
 	assert.NilError(t, err)
 	assert.DeepEqual(t, initCoins, getCoinsByName(ctx, keeper, authKeeper, multiPermAcc.GetName()))
 	assert.DeepEqual(t, initialSupply.Add(initCoins...), totalSupply)
-	testutil.AssertPanics(t, func() { keeper.MintCoins(ctx, authtypes.Burner, initCoins) }) // nolint:errcheck
+	require.Panics(t, func() { keeper.MintCoins(ctx, authtypes.Burner, initCoins) }) //nolint:errcheck // we're testing for a panic
 }
 
 func TestSupply_BurnCoins(t *testing.T) {
@@ -347,11 +354,11 @@ func TestSupply_BurnCoins(t *testing.T) {
 	supplyAfterInflation, _, err := keeper.GetPaginatedTotalSupply(ctx, &query.PageRequest{})
 	assert.NilError(t, err)
 	// no module account
-	testutil.AssertPanics(t, func() { keeper.BurnCoins(ctx, "", initCoins) }) // nolint:errcheck
+	require.Panics(t, func() { keeper.BurnCoins(ctx, "", initCoins) }) //nolint:errcheck // we're testing for a panic
 	// invalid permission
-	testutil.AssertPanics(t, func() { keeper.BurnCoins(ctx, authtypes.Minter, initCoins) }) // nolint:errcheck
+	require.Panics(t, func() { keeper.BurnCoins(ctx, authtypes.Minter, initCoins) }) //nolint:errcheck // we're testing for a panic
 	// random permission
-	testutil.AssertPanics(t, func() { keeper.BurnCoins(ctx, randomPerm, supplyAfterInflation) }) // nolint:errcheck
+	require.Panics(t, func() { keeper.BurnCoins(ctx, randomPerm, supplyAfterInflation) }) //nolint:errcheck // we're testing for a panic
 	err = keeper.BurnCoins(ctx, authtypes.Burner, supplyAfterInflation)
 	assert.Error(t, err, fmt.Sprintf("spendable balance %s is smaller than %s: insufficient funds", initCoins, supplyAfterInflation))
 
@@ -388,7 +395,7 @@ func TestSendCoinsNewAccount(t *testing.T) {
 	addr1 := sdk.AccAddress([]byte("addr1_______________"))
 	acc1 := f.accountKeeper.NewAccountWithAddress(ctx, addr1)
 	f.accountKeeper.SetAccount(ctx, acc1)
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, balances))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, balances))
 
 	acc1Balances := f.bankKeeper.GetAllBalances(ctx, addr1)
 	assert.DeepEqual(t, balances, acc1Balances)
@@ -421,7 +428,7 @@ func TestInputOutputNewAccount(t *testing.T) {
 	addr1 := sdk.AccAddress([]byte("addr1_______________"))
 	acc1 := f.accountKeeper.NewAccountWithAddress(ctx, addr1)
 	f.accountKeeper.SetAccount(ctx, acc1)
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, balances))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, balances))
 
 	acc1Balances := f.bankKeeper.GetAllBalances(ctx, addr1)
 	assert.DeepEqual(t, balances, acc1Balances)
@@ -476,7 +483,7 @@ func TestInputOutputCoins(t *testing.T) {
 	assert.Error(t, f.bankKeeper.InputOutputCoins(ctx, input, []types.Output{}), "sum inputs != sum outputs")
 	assert.Error(t, f.bankKeeper.InputOutputCoins(ctx, input, outputs), "spendable balance  is smaller than 20bar: insufficient funds")
 
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, balances))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, balances))
 
 	insufficientInput := types.Input{
 		Address: addr1.String(),
@@ -514,12 +521,12 @@ func TestSendCoins(t *testing.T) {
 	addr2 := sdk.AccAddress("addr2_______________")
 	acc2 := f.accountKeeper.NewAccountWithAddress(ctx, addr2)
 	f.accountKeeper.SetAccount(ctx, acc2)
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr2, balances))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr2, balances))
 
 	sendAmt := sdk.NewCoins(newFooCoin(50), newBarCoin(25))
 	assert.Error(t, f.bankKeeper.SendCoins(ctx, addr1, addr2, sendAmt), "spendable balance  is smaller than 25bar: insufficient funds")
 
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, balances))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, balances))
 	assert.NilError(t, f.bankKeeper.SendCoins(ctx, addr1, addr2, sendAmt))
 
 	acc1Balances := f.bankKeeper.GetAllBalances(ctx, addr1)
@@ -558,14 +565,14 @@ func TestValidateBalance(t *testing.T) {
 	f.accountKeeper.SetAccount(ctx, acc)
 
 	balances := sdk.NewCoins(newFooCoin(100))
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, balances))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, balances))
 	assert.NilError(t, f.bankKeeper.ValidateBalance(ctx, addr1))
 
 	bacc := authtypes.NewBaseAccountWithAddress(addr2)
 	vacc := vesting.NewContinuousVestingAccount(bacc, balances.Add(balances...), now.Unix(), endTime.Unix())
 
 	f.accountKeeper.SetAccount(ctx, vacc)
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr2, balances))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr2, balances))
 	assert.Error(t, f.bankKeeper.ValidateBalance(ctx, addr2), "vesting amount 200foo cannot be greater than total amount 100foo")
 }
 
@@ -588,7 +595,7 @@ func TestSendCoins_Invalid_SendLockedCoins(t *testing.T) {
 	vacc := vesting.NewContinuousVestingAccount(acc0, origCoins, now.Unix(), endTime.Unix())
 	f.accountKeeper.SetAccount(ctx, vacc)
 
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, f.ctx, addr2, balances))
+	assert.NilError(t, banktestutil.FundAccount(f.ctx, f.bankKeeper, addr2, balances))
 	assert.Error(t, f.bankKeeper.SendCoins(ctx, addr, addr2, sendCoins), fmt.Sprintf("locked amount exceeds account balance funds: %s > 0stake: insufficient funds", origCoins))
 }
 
@@ -651,7 +658,7 @@ func TestHasBalance(t *testing.T) {
 	balances := sdk.NewCoins(newFooCoin(100))
 	assert.Assert(t, f.bankKeeper.HasBalance(ctx, addr, newFooCoin(99)) == false)
 
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr, balances))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr, balances))
 	assert.Assert(t, f.bankKeeper.HasBalance(ctx, addr, newFooCoin(101)) == false)
 	assert.Assert(t, f.bankKeeper.HasBalance(ctx, addr, newFooCoin(100)))
 	assert.Assert(t, f.bankKeeper.HasBalance(ctx, addr, newFooCoin(1)))
@@ -668,7 +675,7 @@ func TestMsgSendEvents(t *testing.T) {
 
 	f.accountKeeper.SetAccount(ctx, acc)
 	newCoins := sdk.NewCoins(sdk.NewInt64Coin(fooDenom, 50))
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr, newCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr, newCoins))
 
 	assert.NilError(t, f.bankKeeper.SendCoins(ctx, addr, addr2, newCoins))
 	event1 := sdk.Event{
@@ -740,7 +747,7 @@ func TestMsgMultiSendEvents(t *testing.T) {
 	assert.Equal(t, 0, len(events))
 
 	// Set addr's coins but not addr2's coins
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr, sdk.NewCoins(sdk.NewInt64Coin(fooDenom, 50), sdk.NewInt64Coin(barDenom, 100))))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr, sdk.NewCoins(sdk.NewInt64Coin(fooDenom, 50), sdk.NewInt64Coin(barDenom, 100))))
 	assert.NilError(t, f.bankKeeper.InputOutputCoins(ctx, input, outputs))
 
 	events = ctx.EventManager().ABCIEvents()
@@ -757,10 +764,10 @@ func TestMsgMultiSendEvents(t *testing.T) {
 	assert.DeepEqual(t, abci.Event(event1), events[7])
 
 	// Set addr's coins and addr2's coins
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr, sdk.NewCoins(sdk.NewInt64Coin(fooDenom, 50))))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr, sdk.NewCoins(sdk.NewInt64Coin(fooDenom, 50))))
 	newCoins = sdk.NewCoins(sdk.NewInt64Coin(fooDenom, 50))
 
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr, sdk.NewCoins(sdk.NewInt64Coin(barDenom, 100))))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr, sdk.NewCoins(sdk.NewInt64Coin(barDenom, 100))))
 	newCoins2 = sdk.NewCoins(sdk.NewInt64Coin(barDenom, 100))
 
 	assert.NilError(t, f.bankKeeper.InputOutputCoins(ctx, input, outputs))
@@ -821,8 +828,8 @@ func TestSpendableCoins(t *testing.T) {
 	f.accountKeeper.SetAccount(ctx, macc)
 	f.accountKeeper.SetAccount(ctx, vacc)
 	f.accountKeeper.SetAccount(ctx, acc)
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, origCoins))
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr2, origCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, origCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr2, origCoins))
 
 	assert.DeepEqual(t, origCoins, f.bankKeeper.SpendableCoins(ctx, addr2))
 	assert.DeepEqual(t, origCoins[0], f.bankKeeper.SpendableCoin(ctx, addr2, "stake"))
@@ -852,13 +859,13 @@ func TestVestingAccountSend(t *testing.T) {
 	vacc := vesting.NewContinuousVestingAccount(bacc, origCoins, now.Unix(), endTime.Unix())
 
 	f.accountKeeper.SetAccount(ctx, vacc)
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, origCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, origCoins))
 
 	// require that no coins be sendable at the beginning of the vesting schedule
 	assert.Error(t, f.bankKeeper.SendCoins(ctx, addr1, addr2, sendCoins), fmt.Sprintf("spendable balance  is smaller than %s: insufficient funds", sendCoins))
 
 	// receive some coins
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, sendCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, sendCoins))
 	// require that all vested coins are spendable plus any received
 	ctx = ctx.WithBlockTime(now.Add(12 * time.Hour))
 	assert.NilError(t, f.bankKeeper.SendCoins(ctx, addr1, addr2, sendCoins))
@@ -887,13 +894,13 @@ func TestPeriodicVestingAccountSend(t *testing.T) {
 	vacc := vesting.NewPeriodicVestingAccount(bacc, origCoins, ctx.BlockHeader().Time.Unix(), periods)
 
 	f.accountKeeper.SetAccount(ctx, vacc)
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, origCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, origCoins))
 
 	// require that no coins be sendable at the beginning of the vesting schedule
 	assert.Error(t, f.bankKeeper.SendCoins(ctx, addr1, addr2, sendCoins), fmt.Sprintf("spendable balance  is smaller than %s: insufficient funds", sendCoins))
 
 	// receive some coins
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, sendCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, sendCoins))
 
 	// require that all vested coins are spendable plus any received
 	ctx = ctx.WithBlockTime(now.Add(12 * time.Hour))
@@ -922,8 +929,8 @@ func TestVestingAccountReceive(t *testing.T) {
 
 	f.accountKeeper.SetAccount(ctx, vacc)
 	f.accountKeeper.SetAccount(ctx, acc)
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, origCoins))
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr2, origCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, origCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr2, origCoins))
 
 	// send some coins to the vesting account
 	assert.NilError(t, f.bankKeeper.SendCoins(ctx, addr2, addr1, sendCoins))
@@ -964,8 +971,8 @@ func TestPeriodicVestingAccountReceive(t *testing.T) {
 
 	f.accountKeeper.SetAccount(ctx, vacc)
 	f.accountKeeper.SetAccount(ctx, acc)
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, origCoins))
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr2, origCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, origCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr2, origCoins))
 
 	// send some coins to the vesting account
 	assert.NilError(t, f.bankKeeper.SendCoins(ctx, addr2, addr1, sendCoins))
@@ -1004,8 +1011,8 @@ func TestDelegateCoins(t *testing.T) {
 	f.accountKeeper.SetAccount(ctx, vacc)
 	f.accountKeeper.SetAccount(ctx, acc)
 	f.accountKeeper.SetAccount(ctx, macc)
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, origCoins))
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr2, origCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, origCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr2, origCoins))
 
 	ctx = ctx.WithBlockTime(now.Add(12 * time.Hour))
 
@@ -1074,8 +1081,8 @@ func TestUndelegateCoins(t *testing.T) {
 	f.accountKeeper.SetAccount(ctx, vacc)
 	f.accountKeeper.SetAccount(ctx, acc)
 	f.accountKeeper.SetAccount(ctx, macc)
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, origCoins))
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr2, origCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, origCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr2, origCoins))
 
 	ctx = ctx.WithBlockTime(now.Add(12 * time.Hour))
 
@@ -1128,7 +1135,7 @@ func TestUndelegateCoins_Invalid(t *testing.T) {
 	assert.Error(t, f.bankKeeper.UndelegateCoins(ctx, addrModule, addr1, delCoins), fmt.Sprintf("module account %s does not exist: unknown address", addrModule.String()))
 
 	f.accountKeeper.SetAccount(ctx, macc)
-	assert.NilError(t, banktestutil.FundAccount(f.bankKeeper, ctx, addr1, origCoins))
+	assert.NilError(t, banktestutil.FundAccount(ctx, f.bankKeeper, addr1, origCoins))
 
 	assert.Error(t, f.bankKeeper.UndelegateCoins(ctx, addrModule, addr1, delCoins), fmt.Sprintf("spendable balance  is smaller than %s: insufficient funds", delCoins))
 	f.accountKeeper.SetAccount(ctx, acc)
@@ -1206,8 +1213,10 @@ func TestBalanceTrackingEvents(t *testing.T) {
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 
-	f.bankKeeper = keeper.NewBaseKeeper(f.appCodec, f.fetchStoreKey(types.StoreKey),
+	bankStoreService := runtime.NewKVStoreService(f.fetchStoreKey(types.StoreKey).(*storetypes.KVStoreKey))
+	f.bankKeeper = keeper.NewBaseKeeper(f.appCodec, bankStoreService,
 		f.accountKeeper, nil, authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		log.NewNopLogger(),
 	)
 
 	// set account with multiple permissions
@@ -1247,26 +1256,26 @@ func TestBalanceTrackingEvents(t *testing.T) {
 	for _, e := range f.ctx.EventManager().ABCIEvents() {
 		switch e.Type {
 		case types.EventTypeCoinBurn:
-			burnedCoins, err := sdk.ParseCoinsNormalized((string)(e.Attributes[1].Value))
+			burnedCoins, err := sdk.ParseCoinsNormalized(e.Attributes[1].Value)
 			assert.NilError(t, err)
 			supply = supply.Sub(burnedCoins...)
 
 		case types.EventTypeCoinMint:
-			mintedCoins, err := sdk.ParseCoinsNormalized((string)(e.Attributes[1].Value))
+			mintedCoins, err := sdk.ParseCoinsNormalized(e.Attributes[1].Value)
 			assert.NilError(t, err)
 			supply = supply.Add(mintedCoins...)
 
 		case types.EventTypeCoinSpent:
-			coinsSpent, err := sdk.ParseCoinsNormalized((string)(e.Attributes[1].Value))
+			coinsSpent, err := sdk.ParseCoinsNormalized(e.Attributes[1].Value)
 			assert.NilError(t, err)
-			spender, err := sdk.AccAddressFromHexUnsafe((string)(e.Attributes[0].Value))
+			spender, err := sdk.AccAddressFromHexUnsafe(e.Attributes[0].Value)
 			assert.NilError(t, err)
 			balances[spender.String()] = balances[spender.String()].Sub(coinsSpent...)
 
 		case types.EventTypeCoinReceived:
-			coinsRecv, err := sdk.ParseCoinsNormalized((string)(e.Attributes[1].Value))
+			coinsRecv, err := sdk.ParseCoinsNormalized(e.Attributes[1].Value)
 			assert.NilError(t, err)
-			receiver, err := sdk.AccAddressFromHexUnsafe((string)(e.Attributes[0].Value))
+			receiver, err := sdk.AccAddressFromHexUnsafe(e.Attributes[0].Value)
 			assert.NilError(t, err)
 			balances[receiver.String()] = balances[receiver.String()].Add(coinsRecv...)
 		}
@@ -1326,7 +1335,7 @@ func TestMintCoinRestrictions(t *testing.T) {
 	f := initFixture(t)
 	t.Parallel()
 
-	type BankMintingRestrictionFn func(ctx sdk.Context, coins sdk.Coins) error
+	type BankMintingRestrictionFn func(ctx context.Context, coins sdk.Coins) error
 
 	maccPerms := make(map[string][]string)
 	maccPerms[multiPerm] = []string{authtypes.Burner, authtypes.Minter, authtypes.Staking}
@@ -1351,7 +1360,7 @@ func TestMintCoinRestrictions(t *testing.T) {
 	}{
 		{
 			"restriction",
-			func(_ sdk.Context, coins sdk.Coins) error {
+			func(_ context.Context, coins sdk.Coins) error {
 				for _, coin := range coins {
 					if coin.Denom != fooDenom {
 						return fmt.Errorf("Module %s only has perms for minting %s coins, tried minting %s coins", types.ModuleName, fooDenom, coin.Denom)
@@ -1373,8 +1382,10 @@ func TestMintCoinRestrictions(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		f.bankKeeper = keeper.NewBaseKeeper(f.appCodec, f.fetchStoreKey(types.StoreKey),
+		bankStoreService := runtime.NewKVStoreService(f.fetchStoreKey(types.StoreKey).(*storetypes.KVStoreKey))
+		f.bankKeeper = keeper.NewBaseKeeper(f.appCodec, bankStoreService,
 			f.accountKeeper, nil, authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+			log.NewNopLogger(),
 		).WithMintCoinsRestriction(keeper.MintingRestrictionFn(test.restrictionFn))
 		for _, testCase := range test.testCases {
 			if testCase.expectPass {
@@ -1801,8 +1812,8 @@ func TestMigrator_Migrate3to4(t *testing.T) {
 			migrator := keeper.NewMigrator(bankKeeper, legacySubspace)
 			assert.NilError(t, migrator.Migrate3to4(ctx))
 			newParams := bankKeeper.GetParams(ctx)
-			assert.Assert(t, len(newParams.SendEnabled) == 0)
-			for _, se := range params.SendEnabled {
+			assert.Assert(t, len(newParams.SendEnabled) == 0) //nolint:staticcheck // We need to test the deprecated send enabled approach
+			for _, se := range params.SendEnabled {           //nolint:staticcheck // We need to test the deprecated send enabled approach
 				actual := bankKeeper.IsSendEnabledDenom(ctx, se.Denom)
 				assert.Equal(t, se.Enabled, actual, se.Denom)
 			}
@@ -1816,7 +1827,7 @@ func TestSetParams(t *testing.T) {
 
 	ctx, bankKeeper := f.ctx, f.bankKeeper
 	params := types.NewParams(true)
-	params.SendEnabled = []*types.SendEnabled{
+	params.SendEnabled = []*types.SendEnabled{ //nolint:staticcheck // We need to test the deprecated send enabled approach
 		{Denom: "paramscointrue", Enabled: true},
 		{Denom: "paramscoinfalse", Enabled: false},
 	}
@@ -1825,7 +1836,7 @@ func TestSetParams(t *testing.T) {
 	t.Run("stored params are as expected", func(t *testing.T) {
 		actual := bankKeeper.GetParams(ctx)
 		assert.Assert(t, actual.DefaultSendEnabled, "DefaultSendEnabled")
-		assert.Assert(t, len(actual.SendEnabled) == 0, "SendEnabled")
+		assert.Assert(t, len(actual.SendEnabled) == 0, "SendEnabled") //nolint:staticcheck // We need to test the deprecated send enabled approach
 	})
 
 	t.Run("send enabled params converted to store", func(t *testing.T) {

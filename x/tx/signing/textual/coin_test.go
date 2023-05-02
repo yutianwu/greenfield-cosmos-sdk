@@ -71,7 +71,7 @@ func TestMetadataQuerier(t *testing.T) {
 	require.ErrorIs(t, err, expErr)
 }
 
-func TestCoinJsonTestcases(t *testing.T) {
+func TestCoinJSONTestcases(t *testing.T) {
 	var testcases []coinJSONTest
 	raw, err := os.ReadFile("./internal/testdata/coin.json")
 	require.NoError(t, err)

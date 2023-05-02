@@ -10,10 +10,11 @@ import (
 )
 
 var (
-	pk1      = ed25519.GenPrivKey().PubKey()
-	pk1Any   *codectypes.Any
-	pk2      = ed25519.GenPrivKey().PubKey()
-	pk3      = ed25519.GenPrivKey().PubKey()
+	pk1    = ed25519.GenPrivKey().PubKey()
+	pk1Any *codectypes.Any
+	pk2    = ed25519.GenPrivKey().PubKey()
+	pk3    = ed25519.GenPrivKey().PubKey()
+
 	valAddr1 = sdk.AccAddress(pk1.Address())
 	valAddr2 = sdk.AccAddress(pk2.Address())
 	valAddr3 = sdk.AccAddress(pk3.Address())

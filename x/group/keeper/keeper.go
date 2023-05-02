@@ -98,7 +98,7 @@ func NewKeeper(storeKey storetypes.StoreKey, cdc codec.Codec, router baseapp.Mes
 		if err != nil {
 			return nil, err
 		}
-		return []interface{}{addr.Bytes()}, nil
+		return []interface{}{addr}, nil
 	}, []byte{})
 	if err != nil {
 		panic(err.Error())
@@ -123,7 +123,7 @@ func NewKeeper(storeKey storetypes.StoreKey, cdc codec.Codec, router baseapp.Mes
 		if err != nil {
 			return nil, err
 		}
-		return []interface{}{addr.Bytes()}, nil
+		return []interface{}{addr}, nil
 	}, []byte{})
 	if err != nil {
 		panic(err.Error())
@@ -148,7 +148,7 @@ func NewKeeper(storeKey storetypes.StoreKey, cdc codec.Codec, router baseapp.Mes
 		if err != nil {
 			return nil, err
 		}
-		return []interface{}{addr.Bytes()}, nil
+		return []interface{}{addr}, nil
 	}, []byte{})
 	if err != nil {
 		panic(err.Error())
@@ -166,7 +166,7 @@ func NewKeeper(storeKey storetypes.StoreKey, cdc codec.Codec, router baseapp.Mes
 		if err != nil {
 			return nil, err
 		}
-		return []interface{}{addr.Bytes()}, nil
+		return []interface{}{addr}, nil
 	}, []byte{})
 	if err != nil {
 		panic(err.Error())
@@ -196,7 +196,7 @@ func NewKeeper(storeKey storetypes.StoreKey, cdc codec.Codec, router baseapp.Mes
 		if err != nil {
 			return nil, err
 		}
-		return []interface{}{addr.Bytes()}, nil
+		return []interface{}{addr}, nil
 	}, []byte{})
 	if err != nil {
 		panic(err.Error())

@@ -5,12 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"cosmossdk.io/depinject"
+	"cosmossdk.io/log"
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/stretchr/testify/suite"
 
-	authzkeeper "github.com/cosmos/cosmos-sdk/x/authz/keeper"
-
+	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/runtime"
@@ -19,6 +20,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
+	authzkeeper "github.com/cosmos/cosmos-sdk/x/authz/keeper"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	"github.com/cosmos/cosmos-sdk/x/bank/testutil"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
@@ -36,6 +38,7 @@ type SimTestSuite struct {
 	app               *runtime.App
 	codec             codec.Codec
 	interfaceRegistry codectypes.InterfaceRegistry
+	txConfig          client.TxConfig
 	accountKeeper     authkeeper.AccountKeeper
 	authzKeeper       authzkeeper.Keeper
 	bankKeeper        bankkeeper.Keeper
@@ -44,9 +47,13 @@ type SimTestSuite struct {
 
 func (suite *SimTestSuite) SetupTest() {
 	app, err := simtestutil.Setup(
-		grouptestutil.AppConfig,
+		depinject.Configs(
+			grouptestutil.AppConfig,
+			depinject.Supply(log.NewNopLogger()),
+		),
 		&suite.codec,
 		&suite.interfaceRegistry,
+		&suite.txConfig,
 		&suite.accountKeeper,
 		&suite.authzKeeper,
 		&suite.bankKeeper,
@@ -62,7 +69,7 @@ func (suite *SimTestSuite) TestWeightedOperations() {
 	cdc := suite.codec
 	appParams := make(simtypes.AppParams)
 
-	weightedOps := simulation.WeightedOperations(suite.interfaceRegistry, appParams, cdc, suite.accountKeeper,
+	weightedOps := simulation.WeightedOperations(suite.interfaceRegistry, appParams, cdc, suite.txConfig, suite.accountKeeper,
 		suite.bankKeeper, suite.groupKeeper, cdc,
 	)
 
@@ -115,7 +122,7 @@ func (suite *SimTestSuite) getTestingAccounts(r *rand.Rand, n int) []simtypes.Ac
 	for _, account := range accounts {
 		acc := suite.accountKeeper.NewAccountWithAddress(suite.ctx, account.Address)
 		suite.accountKeeper.SetAccount(suite.ctx, acc)
-		suite.Require().NoError(testutil.FundAccount(suite.bankKeeper, suite.ctx, account.Address, initCoins))
+		suite.Require().NoError(testutil.FundAccount(suite.ctx, suite.bankKeeper, account.Address, initCoins))
 	}
 
 	return accounts
@@ -139,7 +146,7 @@ func (suite *SimTestSuite) TestSimulateCreateGroup() {
 	acc := accounts[0]
 
 	// execute operation
-	op := simulation.SimulateMsgCreateGroup(codec.NewProtoCodec(suite.interfaceRegistry), suite.accountKeeper, suite.bankKeeper)
+	op := simulation.SimulateMsgCreateGroup(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.accountKeeper, suite.bankKeeper)
 	operationMsg, futureOperations, err := op(r, suite.app.BaseApp, suite.ctx, accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 
@@ -169,7 +176,7 @@ func (suite *SimTestSuite) TestSimulateCreateGroupWithPolicy() {
 	acc := accounts[0]
 
 	// execute operation
-	op := simulation.SimulateMsgCreateGroupWithPolicy(codec.NewProtoCodec(suite.interfaceRegistry), suite.accountKeeper, suite.bankKeeper)
+	op := simulation.SimulateMsgCreateGroupWithPolicy(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.accountKeeper, suite.bankKeeper)
 	operationMsg, futureOperations, err := op(r, suite.app.BaseApp, suite.ctx, accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 
@@ -212,7 +219,7 @@ func (suite *SimTestSuite) TestSimulateCreateGroupPolicy() {
 	})
 
 	// execute operation
-	op := simulation.SimulateMsgCreateGroupPolicy(codec.NewProtoCodec(suite.interfaceRegistry), suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
+	op := simulation.SimulateMsgCreateGroupPolicy(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
 	operationMsg, futureOperations, err := op(r, suite.app.BaseApp, suite.ctx, accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 
@@ -266,7 +273,7 @@ func (suite *SimTestSuite) TestSimulateSubmitProposal() {
 	})
 
 	// execute operation
-	op := simulation.SimulateMsgSubmitProposal(codec.NewProtoCodec(suite.interfaceRegistry), suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
+	op := simulation.SimulateMsgSubmitProposal(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
 	operationMsg, futureOperations, err := op(r, suite.app.BaseApp, suite.ctx, accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 
@@ -333,7 +340,7 @@ func (suite *SimTestSuite) TestWithdrawProposal() {
 	})
 
 	// execute operation
-	op := simulation.SimulateMsgWithdrawProposal(codec.NewProtoCodec(suite.interfaceRegistry), suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
+	op := simulation.SimulateMsgWithdrawProposal(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
 	operationMsg, futureOperations, err := op(r, suite.app.BaseApp, suite.ctx, accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 
@@ -401,7 +408,7 @@ func (suite *SimTestSuite) TestSimulateVote() {
 	})
 
 	// execute operation
-	op := simulation.SimulateMsgVote(codec.NewProtoCodec(suite.interfaceRegistry), suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
+	op := simulation.SimulateMsgVote(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
 	operationMsg, futureOperations, err := op(r, suite.app.BaseApp, suite.ctx, accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 
@@ -477,7 +484,7 @@ func (suite *SimTestSuite) TestSimulateExec() {
 	})
 
 	// execute operation
-	op := simulation.SimulateMsgExec(codec.NewProtoCodec(suite.interfaceRegistry), suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
+	op := simulation.SimulateMsgExec(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
 	operationMsg, futureOperations, err := op(r, suite.app.BaseApp, suite.ctx, accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 
@@ -520,7 +527,7 @@ func (suite *SimTestSuite) TestSimulateUpdateGroupAdmin() {
 	})
 
 	// execute operation
-	op := simulation.SimulateMsgUpdateGroupAdmin(codec.NewProtoCodec(suite.interfaceRegistry), suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
+	op := simulation.SimulateMsgUpdateGroupAdmin(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
 	operationMsg, futureOperations, err := op(r, suite.app.BaseApp, suite.ctx, accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 
@@ -563,7 +570,7 @@ func (suite *SimTestSuite) TestSimulateUpdateGroupMetadata() {
 	})
 
 	// execute operation
-	op := simulation.SimulateMsgUpdateGroupMetadata(codec.NewProtoCodec(suite.interfaceRegistry), suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
+	op := simulation.SimulateMsgUpdateGroupMetadata(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
 	operationMsg, futureOperations, err := op(r, suite.app.BaseApp, suite.ctx, accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 
@@ -606,7 +613,7 @@ func (suite *SimTestSuite) TestSimulateUpdateGroupMembers() {
 	})
 
 	// execute operation
-	op := simulation.SimulateMsgUpdateGroupMembers(codec.NewProtoCodec(suite.interfaceRegistry), suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
+	op := simulation.SimulateMsgUpdateGroupMembers(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
 	operationMsg, futureOperations, err := op(r, suite.app.BaseApp, suite.ctx, accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 
@@ -660,7 +667,7 @@ func (suite *SimTestSuite) TestSimulateUpdateGroupPolicyAdmin() {
 	})
 
 	// execute operation
-	op := simulation.SimulateMsgUpdateGroupPolicyAdmin(codec.NewProtoCodec(suite.interfaceRegistry), suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
+	op := simulation.SimulateMsgUpdateGroupPolicyAdmin(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
 	operationMsg, futureOperations, err := op(r, suite.app.BaseApp, suite.ctx, accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 
@@ -714,7 +721,7 @@ func (suite *SimTestSuite) TestSimulateUpdateGroupPolicyDecisionPolicy() {
 	})
 
 	// execute operation
-	op := simulation.SimulateMsgUpdateGroupPolicyDecisionPolicy(codec.NewProtoCodec(suite.interfaceRegistry), suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
+	op := simulation.SimulateMsgUpdateGroupPolicyDecisionPolicy(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
 	operationMsg, futureOperations, err := op(r, suite.app.BaseApp, suite.ctx, accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 
@@ -768,7 +775,7 @@ func (suite *SimTestSuite) TestSimulateUpdateGroupPolicyMetadata() {
 	})
 
 	// execute operation
-	op := simulation.SimulateMsgUpdateGroupPolicyMetadata(codec.NewProtoCodec(suite.interfaceRegistry), suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
+	op := simulation.SimulateMsgUpdateGroupPolicyMetadata(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.accountKeeper, suite.bankKeeper, suite.groupKeeper)
 	operationMsg, futureOperations, err := op(r, suite.app.BaseApp, suite.ctx, accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 
@@ -835,7 +842,7 @@ func (suite *SimTestSuite) TestSimulateLeaveGroup() {
 	})
 
 	// execute operation
-	op := simulation.SimulateMsgLeaveGroup(codec.NewProtoCodec(suite.interfaceRegistry), suite.groupKeeper, suite.accountKeeper, suite.bankKeeper)
+	op := simulation.SimulateMsgLeaveGroup(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.groupKeeper, suite.accountKeeper, suite.bankKeeper)
 	operationMsg, futureOperations, err := op(r, suite.app.BaseApp, suite.ctx, accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 

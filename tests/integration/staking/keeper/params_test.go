@@ -3,6 +3,8 @@ package keeper
 import (
 	"testing"
 
+	"cosmossdk.io/depinject"
+	"cosmossdk.io/log"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"gotest.tools/v3/assert"
 
@@ -15,14 +17,17 @@ import (
 func TestParams(t *testing.T) {
 	var stakingKeeper *keeper.Keeper
 	app, err := simtestutil.SetupWithConfiguration(
-		configurator.NewAppConfig(
-			configurator.BankModule(),
-			configurator.TxModule(),
-			configurator.StakingModule(),
-			configurator.ParamsModule(),
-			configurator.ConsensusModule(),
-			configurator.AuthModule(),
-			configurator.AuthzModule(),
+		depinject.Configs(
+			configurator.NewAppConfig(
+				configurator.BankModule(),
+				configurator.TxModule(),
+				configurator.StakingModule(),
+				configurator.ParamsModule(),
+				configurator.ConsensusModule(),
+				configurator.AuthModule(),
+				configurator.AuthzModule(),
+			),
+			depinject.Supply(log.NewNopLogger()),
 		),
 		simtestutil.DefaultStartUpConfig(),
 		&stakingKeeper)

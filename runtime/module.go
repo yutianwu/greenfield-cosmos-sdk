@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"cosmossdk.io/core/store"
+	"cosmossdk.io/log"
+	"github.com/cosmos/gogoproto/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoregistry"
 
@@ -13,6 +15,7 @@ import (
 	runtimev1alpha1 "cosmossdk.io/api/cosmos/app/runtime/v1alpha1"
 	appv1alpha1 "cosmossdk.io/api/cosmos/app/v1alpha1"
 	"cosmossdk.io/core/appmodule"
+	"cosmossdk.io/core/event"
 	"cosmossdk.io/depinject"
 
 	storetypes "cosmossdk.io/store/types"
@@ -23,7 +26,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/std"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/types/msgservice"
-	"github.com/cosmos/gogoproto/proto"
 )
 
 type appModule struct {
@@ -63,6 +65,7 @@ func init() {
 			ProvideKVStoreService,
 			ProvideMemoryStoreService,
 			ProvideTransientStoreService,
+			ProvideEventService,
 		),
 		appmodule.Invoke(SetupAppBuilder),
 	)
@@ -78,8 +81,23 @@ func ProvideApp() (
 	appmodule.AppModule,
 	protodesc.Resolver,
 	protoregistry.MessageTypeResolver,
+	error,
 ) {
-	interfaceRegistry := codectypes.NewInterfaceRegistry()
+	protoFiles, err := proto.MergedRegistry()
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, nil, nil, err
+	}
+	protoTypes := protoregistry.GlobalTypes
+
+	// At startup, check that all proto annotations are correct.
+	err = msgservice.ValidateProtoAnnotations(protoFiles)
+	if err != nil {
+		// Once we switch to using protoreflect-based antehandlers, we might
+		// want to panic here instead of logging a warning.
+		_, _ = fmt.Fprintln(os.Stderr, err.Error())
+	}
+
+	interfaceRegistry := codectypes.NewInterfaceRegistryWithProtoFiles(protoFiles)
 	amino := codec.NewLegacyAmino()
 
 	std.RegisterInterfaces(interfaceRegistry)
@@ -97,21 +115,7 @@ func ProvideApp() (
 	}
 	appBuilder := &AppBuilder{app}
 
-	protoFiles, err := proto.MergedRegistry()
-	if err != nil {
-		panic(err)
-	}
-	protoTypes := protoregistry.GlobalTypes
-
-	// At startup, check that all proto annotations are correct.
-	err = msgservice.ValidateProtoAnnotations(protoFiles)
-	if err != nil {
-		// Once we switch to using protoreflect-based antehandlers, we might
-		// want to panic here instead of logging a warning.
-		fmt.Fprintln(os.Stderr, err.Error())
-	}
-
-	return interfaceRegistry, cdc, amino, appBuilder, cdc, msgServiceRouter, appModule{app}, protoFiles, protoTypes
+	return interfaceRegistry, cdc, amino, appBuilder, cdc, msgServiceRouter, appModule{app}, protoFiles, protoTypes, nil
 }
 
 type AppInputs struct {
@@ -124,6 +128,7 @@ type AppInputs struct {
 	BaseAppOptions    []BaseAppOption
 	InterfaceRegistry codectypes.InterfaceRegistry
 	LegacyAmino       *codec.LegacyAmino
+	Logger            log.Logger
 }
 
 func SetupAppBuilder(inputs AppInputs) {
@@ -132,6 +137,7 @@ func SetupAppBuilder(inputs AppInputs) {
 	app.config = inputs.Config
 	app.ModuleManager = module.NewManagerFromMap(inputs.Modules)
 	app.appConfig = inputs.AppConfig
+	app.logger = inputs.Logger
 
 	for name, mod := range inputs.Modules {
 		if basicMod, ok := mod.(module.AppModuleBasic); ok {
@@ -201,4 +207,8 @@ func ProvideMemoryStoreService(key depinject.ModuleKey, app *AppBuilder) store.M
 func ProvideTransientStoreService(key depinject.ModuleKey, app *AppBuilder) store.TransientStoreService {
 	storeKey := ProvideTransientStoreKey(key, app)
 	return transientStoreService{key: storeKey}
+}
+
+func ProvideEventService() event.Service {
+	return EventService{}
 }

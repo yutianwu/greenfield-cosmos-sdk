@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"bytes"
 	"context"
 
 	"google.golang.org/grpc/codes"
@@ -117,7 +118,7 @@ func (k Keeper) GranterGrants(c context.Context, req *authz.QueryGranterGrantsRe
 
 		grantee := firstAddressFromGrantStoreKey(key)
 		return &authz.GrantAuthorization{
-			Granter:       granter.String(),
+			Granter:       req.Granter,
 			Grantee:       grantee.String(),
 			Authorization: any,
 			Expiration:    auth.Expiration,
@@ -156,7 +157,7 @@ func (k Keeper) GranteeGrants(c context.Context, req *authz.QueryGranteeGrantsRe
 		}
 
 		granter, g, _ := parseGrantStoreKey(append(GrantKey, key...))
-		if !g.Equals(grantee) {
+		if !bytes.Equal(g, grantee) {
 			return nil, nil
 		}
 
@@ -169,7 +170,7 @@ func (k Keeper) GranteeGrants(c context.Context, req *authz.QueryGranteeGrantsRe
 			Authorization: authorizationAny,
 			Expiration:    auth.Expiration,
 			Granter:       granter.String(),
-			Grantee:       grantee.String(),
+			Grantee:       req.Grantee,
 		}, nil
 	}, func() *authz.Grant {
 		return &authz.Grant{}

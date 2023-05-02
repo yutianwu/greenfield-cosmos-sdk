@@ -226,22 +226,10 @@ func (ak AccountKeeper) AccountInfo(goCtx context.Context, req *types.QueryAccou
 
 	return &types.QueryAccountInfoResponse{
 		Info: &types.BaseAccount{
-			Address:       addr.String(),
+			Address:       req.Address,
 			PubKey:        pkAny,
 			AccountNumber: account.GetAccountNumber(),
 			Sequence:      account.GetSequence(),
 		},
 	}, nil
-}
-
-// BytesToString converts an address from bytes to string, using the
-// keeper's bech32 prefix.
-func (ak AccountKeeper) BytesToString(address []byte) (string, error) {
-	return ak.addressCdc.BytesToString(address)
-}
-
-// StringToBytes converts an address from string to bytes, using the
-// keeper's bech32 prefix.
-func (ak AccountKeeper) StringToBytes(address string) ([]byte, error) {
-	return ak.addressCdc.StringToBytes(address)
 }

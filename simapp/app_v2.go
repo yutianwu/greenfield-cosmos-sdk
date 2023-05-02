@@ -3,7 +3,6 @@
 package simapp
 
 import (
-	_ "embed"
 	"io"
 	"os"
 	"path/filepath"
@@ -185,6 +184,7 @@ func NewSimApp(
 			depinject.Supply(
 				// supply the application options
 				appOpts,
+				logger,
 
 				// ADVANCED CONFIGURATION
 
@@ -273,7 +273,7 @@ func NewSimApp(
 		},
 		baseapp.SetChainID(chainID),
 	)
-	app.App = appBuilder.Build(logger, db, traceStore, baseAppOptions...)
+	app.App = appBuilder.Build(db, traceStore, baseAppOptions...)
 
 	// register streaming services
 	if err := app.RegisterStreamingServices(appOpts, app.kvStoreKeys()); err != nil {

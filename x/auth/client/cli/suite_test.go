@@ -1,19 +1,21 @@
 package cli_test
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"strings"
 	"testing"
 
+	"cosmossdk.io/core/address"
+	"cosmossdk.io/math"
 	abci "github.com/cometbft/cometbft/abci/types"
 	rpcclientmock "github.com/cometbft/cometbft/rpc/client/mock"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
+	addresscodec "github.com/cosmos/cosmos-sdk/codec/address"
 	"github.com/cosmos/cosmos-sdk/crypto/hd"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	"github.com/cosmos/cosmos-sdk/testutil"
@@ -41,6 +43,8 @@ type CLITestSuite struct {
 	clientCtx client.Context
 	val       sdk.AccAddress
 	val1      sdk.AccAddress
+
+	ac address.Codec
 }
 
 func TestCLITestSuite(t *testing.T) {
@@ -59,7 +63,6 @@ func (s *CLITestSuite) SetupSuite() {
 		WithOutput(io.Discard).
 		WithChainID(testutil.DefaultChainId)
 
-	var outBuf bytes.Buffer
 	ctxGen := func() client.Context {
 		bz, _ := s.encCfg.Codec.Marshal(&sdk.TxResponse{})
 		c := clitestutil.NewMockCometRPC(abci.ResponseQuery{
@@ -67,7 +70,7 @@ func (s *CLITestSuite) SetupSuite() {
 		})
 		return s.baseCtx.WithClient(c)
 	}
-	s.clientCtx = ctxGen().WithOutput(&outBuf)
+	s.clientCtx = ctxGen()
 
 	kb := s.clientCtx.Keyring
 	valAcc, _, err := kb.NewMnemonic("newAccount", keyring.English, sdk.FullFundraiserPath, keyring.DefaultBIP39Passphrase, hd.EthSecp256k1)
@@ -86,12 +89,14 @@ func (s *CLITestSuite) SetupSuite() {
 	// Create a dummy account for testing purpose
 	_, _, err = kb.NewMnemonic("dummyAccount", keyring.English, sdk.FullFundraiserPath, keyring.DefaultBIP39Passphrase, hd.EthSecp256k1)
 	s.Require().NoError(err)
+
+	s.ac = addresscodec.NewBech32Codec("cosmos")
 }
 
 func (s *CLITestSuite) TestCLIValidateSignatures() {
 	sendTokens := sdk.NewCoins(
-		sdk.NewCoin("testtoken", sdk.NewInt(10)),
-		sdk.NewCoin("stake", sdk.NewInt(10)))
+		sdk.NewCoin("testtoken", math.NewInt(10)),
+		sdk.NewCoin("stake", math.NewInt(10)))
 
 	res, err := s.createBankMsg(s.clientCtx, s.val, sendTokens,
 		fmt.Sprintf("--%s=true", flags.FlagGenerateOnly))
@@ -126,8 +131,8 @@ func (s *CLITestSuite) TestCLIValidateSignatures() {
 
 func (s *CLITestSuite) TestCLISignBatch() {
 	sendTokens := sdk.NewCoins(
-		sdk.NewCoin("testtoken", sdk.NewInt(10)),
-		sdk.NewCoin("stake", sdk.NewInt(10)),
+		sdk.NewCoin("testtoken", math.NewInt(10)),
+		sdk.NewCoin("stake", math.NewInt(10)),
 	)
 
 	generatedStd, err := s.createBankMsg(s.clientCtx, s.val,
@@ -281,7 +286,7 @@ func (s *CLITestSuite) TestCLIQueryTxsCmdByEvents() {
 			[]string{
 				fmt.Sprintf(
 					"--query=tx.fee='%s'",
-					sdk.NewCoins(sdk.NewCoin("stake", sdk.NewInt(10))).String(),
+					sdk.NewCoins(sdk.NewCoin("stake", math.NewInt(10))).String(),
 				),
 				fmt.Sprintf("--%s=json", flags.FlagOutput),
 			},
@@ -292,7 +297,7 @@ func (s *CLITestSuite) TestCLIQueryTxsCmdByEvents() {
 			[]string{
 				fmt.Sprintf(
 					"--query=tx.fee='%s'",
-					sdk.NewCoins(sdk.NewCoin("stake", sdk.NewInt(0))).String(),
+					sdk.NewCoins(sdk.NewCoin("stake", math.NewInt(0))).String(),
 				),
 				fmt.Sprintf("--%s=json", flags.FlagOutput),
 			},
@@ -455,7 +460,7 @@ func (s *CLITestSuite) TestSignWithMultisig() {
 
 	// Create an address that is not in the keyring, will be used to simulate `--multisig`
 	multisig := "0x8ff4ddbDd327DB98AE56baF3Bf05Be0aD6ad7EeF"
-	multisigAddr, err := sdk.AccAddressFromHexUnsafe(multisig)
+	_, err = sdk.AccAddressFromHexUnsafe(multisig)
 	s.Require().NoError(err)
 
 	// Generate a transaction for testing --multisig with an address not in the keyring.
@@ -468,7 +473,7 @@ func (s *CLITestSuite) TestSignWithMultisig() {
 		),
 		fmt.Sprintf("--%s=true", flags.FlagSkipConfirmation),
 		fmt.Sprintf("--%s=%s", flags.FlagBroadcastMode, flags.BroadcastSync),
-		fmt.Sprintf("--%s=%s", flags.FlagFees, sdk.NewCoins(sdk.NewCoin("stake", sdk.NewInt(10))).String()),
+		fmt.Sprintf("--%s=%s", flags.FlagFees, sdk.NewCoins(sdk.NewCoin("stake", math.NewInt(10))).String()),
 		fmt.Sprintf("--%s=true", flags.FlagGenerateOnly),
 	)
 	s.Require().NoError(err)
@@ -481,7 +486,7 @@ func (s *CLITestSuite) TestSignWithMultisig() {
 	// even though the tx signer is NOT the multisig address. This is fine though,
 	// as the main point of this test is to test the `--multisig` flag with an address
 	// that is not in the keyring.
-	_, err = authtestutil.TxSignExec(s.clientCtx, addr1, multiGeneratedTx2File.Name(), "--multisig", multisigAddr.String())
+	_, err = authtestutil.TxSignExec(s.clientCtx, addr1, multiGeneratedTx2File.Name(), "--multisig", multisig)
 	s.Require().Contains(err.Error(), "error getting account from keybase")
 }
 
@@ -571,11 +576,11 @@ func (s *CLITestSuite) TestTxWithoutPublicKey() {
 	// Create a txBuilder with an unsigned tx.
 	txBuilder := txCfg.NewTxBuilder()
 	msg := banktypes.NewMsgSend(s.val, s.val, sdk.NewCoins(
-		sdk.NewCoin("Stake", sdk.NewInt(10)),
+		sdk.NewCoin("Stake", math.NewInt(10)),
 	))
 	err := txBuilder.SetMsgs(msg)
 	s.Require().NoError(err)
-	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin("Stake", sdk.NewInt(150))))
+	txBuilder.SetFeeAmount(sdk.NewCoins(sdk.NewCoin("Stake", math.NewInt(150))))
 	txBuilder.SetGasLimit(testdata.NewTestGasLimit())
 
 	// Create a file with the unsigned tx.
@@ -616,7 +621,7 @@ func (s *CLITestSuite) createBankMsg(clientCtx client.Context, toAddr sdk.AccAdd
 		fmt.Sprintf("--%s=true", flags.FlagSkipConfirmation),
 		fmt.Sprintf("--%s=%s", flags.FlagBroadcastMode, flags.BroadcastSync),
 		fmt.Sprintf("--%s=%s", flags.FlagFees,
-			sdk.NewCoins(sdk.NewCoin("stake", sdk.NewInt(10))).String()),
+			sdk.NewCoins(sdk.NewCoin("stake", math.NewInt(10))).String()),
 	}
 
 	flags = append(flags, extraFlags...)

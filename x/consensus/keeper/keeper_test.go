@@ -35,7 +35,7 @@ func (s *KeeperTestSuite) SetupTest() {
 	encCfg := moduletestutil.MakeTestEncodingConfig()
 	storeService := runtime.NewKVStoreService(key)
 
-	keeper := consensusparamkeeper.NewKeeper(encCfg.Codec, storeService, authtypes.NewModuleAddress(govtypes.ModuleName).String())
+	keeper := consensusparamkeeper.NewKeeper(encCfg.Codec, storeService, authtypes.NewModuleAddress(govtypes.ModuleName).String(), runtime.EventService{})
 
 	s.ctx = ctx
 	s.consensusParamsKeeper = &keeper
@@ -55,14 +55,14 @@ func (s *KeeperTestSuite) TestGRPCQueryConsensusParams() {
 
 	testCases := []struct {
 		msg      string
-		req      types.QueryGetParamsRequest
+		req      types.QueryParamsRequest
 		malleate func()
-		response types.QueryGetParamsResponse
+		response types.QueryParamsResponse
 		expPass  bool
 	}{
 		{
 			"success",
-			types.QueryGetParamsRequest{},
+			types.QueryParamsRequest{},
 			func() {
 				input := &types.MsgUpdateParams{
 					Authority: s.consensusParamsKeeper.GetAuthority(),
@@ -72,7 +72,7 @@ func (s *KeeperTestSuite) TestGRPCQueryConsensusParams() {
 				}
 				s.consensusParamsKeeper.UpdateParams(s.ctx, input)
 			},
-			types.QueryGetParamsResponse{
+			types.QueryParamsResponse{
 				Params: &cmtproto.ConsensusParams{
 					Block:     defaultConsensusParams.Block,
 					Validator: defaultConsensusParams.Validator,
@@ -89,7 +89,7 @@ func (s *KeeperTestSuite) TestGRPCQueryConsensusParams() {
 			s.SetupTest() // reset
 
 			tc.malleate()
-			res, err := s.consensusParamsKeeper.GetParams(s.ctx, &tc.req)
+			res, err := s.consensusParamsKeeper.Params(s.ctx, &tc.req)
 
 			if tc.expPass {
 				s.Require().NoError(err)

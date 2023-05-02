@@ -1,8 +1,6 @@
 package types
 
 import (
-	errorsmod "cosmossdk.io/errors"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/x/auth/migrations/legacytx"
@@ -19,8 +17,6 @@ var (
 )
 
 // NewMsgUnjail creates a new MsgUnjail instance
-//
-//nolint:interfacer
 func NewMsgUnjail(validatorAddr sdk.AccAddress) *MsgUnjail {
 	return &MsgUnjail{
 		ValidatorAddr: validatorAddr.String(),
@@ -39,14 +35,6 @@ func (msg MsgUnjail) GetSignBytes() []byte {
 	return sdk.MustSortJSON(bz)
 }
 
-// ValidateBasic does a sanity check on the provided message.
-func (msg MsgUnjail) ValidateBasic() error {
-	if _, err := sdk.AccAddressFromHexUnsafe(msg.ValidatorAddr); err != nil {
-		return sdkerrors.ErrInvalidAddress.Wrapf("validator input address: %s", err)
-	}
-	return nil
-}
-
 // GetSignBytes implements the LegacyMsg interface.
 func (msg MsgUpdateParams) GetSignBytes() []byte {
 	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(&msg))
@@ -56,19 +44,6 @@ func (msg MsgUpdateParams) GetSignBytes() []byte {
 func (msg MsgUpdateParams) GetSigners() []sdk.AccAddress {
 	addr, _ := sdk.AccAddressFromHexUnsafe(msg.Authority)
 	return []sdk.AccAddress{addr}
-}
-
-// ValidateBasic does a sanity check on the provided data.
-func (msg MsgUpdateParams) ValidateBasic() error {
-	if _, err := sdk.AccAddressFromHexUnsafe(msg.Authority); err != nil {
-		return errorsmod.Wrap(err, "invalid authority address")
-	}
-
-	if err := msg.Params.Validate(); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // NewMsgImpeach creates a new MsgImpeach instance

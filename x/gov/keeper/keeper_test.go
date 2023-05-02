@@ -6,6 +6,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	sdkmath "cosmossdk.io/math"
+
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec"
 	simtestutil "github.com/cosmos/cosmos-sdk/testutil/sims"
@@ -17,6 +19,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
 	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 )
+
+var address1 = "cosmos1ghekyjucln7y67ntx7cf27m9dpuxxemn4c8g4r"
 
 type KeeperTestSuite struct {
 	suite.Suite
@@ -45,7 +49,7 @@ func (suite *KeeperTestSuite) reset() {
 
 	// Populate the gov account with some coins, as the TestProposal we have
 	// is a MsgSend from the gov account.
-	coins := sdk.NewCoins(sdk.NewCoin("stake", sdk.NewInt(100000)))
+	coins := sdk.NewCoins(sdk.NewCoin("stake", sdkmath.NewInt(100000)))
 	err := bankKeeper.MintCoins(suite.ctx, minttypes.ModuleName, coins)
 	suite.NoError(err)
 	err = bankKeeper.SendCoinsFromModuleToModule(ctx, minttypes.ModuleName, types.ModuleName, coins)
@@ -71,7 +75,7 @@ func (suite *KeeperTestSuite) reset() {
 	suite.msgSrvr = keeper.NewMsgServerImpl(suite.govKeeper)
 
 	suite.legacyMsgSrvr = keeper.NewLegacyMsgServerImpl(govAcct.String(), suite.msgSrvr)
-	suite.addrs = simtestutil.AddTestAddrsIncremental(bankKeeper, stakingKeeper, ctx, 3, sdk.NewInt(30000000))
+	suite.addrs = simtestutil.AddTestAddrsIncremental(bankKeeper, stakingKeeper, ctx, 3, sdkmath.NewInt(30000000))
 }
 
 func TestIncrementProposalNumber(t *testing.T) {
@@ -89,6 +93,7 @@ func TestIncrementProposalNumber(t *testing.T) {
 	_, err = govKeeper.SubmitProposal(ctx, tp, "", "test", "summary", sdk.AccAddress("0xd4BFb1CB895840ca474b0D15abb11Cf0f26bc88a"), false)
 	require.NoError(t, err)
 	proposal6, err := govKeeper.SubmitProposal(ctx, tp, "", "test", "summary", sdk.AccAddress("0xd4BFb1CB895840ca474b0D15abb11Cf0f26bc88a"), false)
+
 	require.NoError(t, err)
 
 	require.Equal(t, uint64(6), proposal6.Id)
@@ -100,6 +105,7 @@ func TestProposalQueues(t *testing.T) {
 	// create test proposals
 	tp := TestProposal
 	proposal, err := govKeeper.SubmitProposal(ctx, tp, "", "test", "summary", sdk.AccAddress("0xd4BFb1CB895840ca474b0D15abb11Cf0f26bc88a"), false)
+
 	require.NoError(t, err)
 
 	inactiveIterator := govKeeper.InactiveProposalQueueIterator(ctx, *proposal.DepositEndTime)

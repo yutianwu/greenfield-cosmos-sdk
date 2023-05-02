@@ -290,12 +290,12 @@ func (s *E2ETestSuite) TestGetTxEvents_GRPC() {
 			"with pagination",
 			&tx.GetTxsEventRequest{
 				Query: bankMsgSendEventAction,
-				Page:  2,
+				Page:  1,
 				Limit: 2,
 			},
 			false,
 			"",
-			1,
+			2,
 		},
 		{
 			"with multi events",
@@ -318,13 +318,13 @@ func (s *E2ETestSuite) TestGetTxEvents_GRPC() {
 				s.Require().NoError(err)
 				s.Require().GreaterOrEqual(len(grpcRes.Txs), 1)
 				s.Require().Equal("foobar", grpcRes.Txs[0].Body.Memo)
-				s.Require().Equal(len(grpcRes.Txs), tc.expLen)
+				s.Require().Equal(tc.expLen, len(grpcRes.Txs))
 
 				// Make sure fields are populated.
 				// ref: https://github.com/cosmos/cosmos-sdk/issues/8680
 				// ref: https://github.com/cosmos/cosmos-sdk/issues/8681
 				s.Require().NotEmpty(grpcRes.TxResponses[0].Timestamp)
-				s.Require().NotEmpty(grpcRes.TxResponses[0].RawLog)
+				s.Require().Empty(grpcRes.TxResponses[0].RawLog) // logs are empty if the transactions are successful
 			}
 		})
 	}
@@ -353,9 +353,9 @@ func (s *E2ETestSuite) TestGetTxEvents_GRPCGateway() {
 		},
 		{
 			"with pagination",
-			fmt.Sprintf("%s/cosmos/tx/v1beta1/txs?query=%s&page=%d&limit=%d", val.APIAddress, bankMsgSendEventAction, 2, 2),
+			fmt.Sprintf("%s/cosmos/tx/v1beta1/txs?query=%s&page=%d&limit=%d", val.APIAddress, bankMsgSendEventAction, 1, 2),
 			false,
-			"", 1,
+			"", 2,
 		},
 		{
 			"valid request: order by asc",
@@ -475,7 +475,7 @@ func (s *E2ETestSuite) TestGetTx_GRPCGateway() {
 				// ref: https://github.com/cosmos/cosmos-sdk/issues/8680
 				// ref: https://github.com/cosmos/cosmos-sdk/issues/8681
 				s.Require().NotEmpty(result.TxResponse.Timestamp)
-				s.Require().NotEmpty(result.TxResponse.RawLog)
+				s.Require().Empty(result.TxResponse.RawLog) // logs are empty on successful transactions
 			}
 		})
 	}
@@ -1125,7 +1125,7 @@ type protoTxProvider interface {
 // txBuilderToProtoTx converts a txBuilder into a proto tx.Tx.
 // Deprecated: It's used for testing the deprecated Simulate gRPC endpoint
 // using a proto Tx field and for testing the TxEncode endpoint.
-func txBuilderToProtoTx(txBuilder client.TxBuilder) (*tx.Tx, error) { // nolint
+func txBuilderToProtoTx(txBuilder client.TxBuilder) (*tx.Tx, error) {
 	protoProvider, ok := txBuilder.(protoTxProvider)
 	if !ok {
 		return nil, errorsmod.Wrapf(sdkerrors.ErrInvalidType, "expected proto tx builder, got %T", txBuilder)

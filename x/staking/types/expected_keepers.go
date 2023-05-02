@@ -3,6 +3,7 @@ package types
 import (
 	context "context"
 
+	"cosmossdk.io/core/address"
 	"cosmossdk.io/math"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -17,6 +18,8 @@ type DistributionKeeper interface {
 
 // AccountKeeper defines the expected account keeper (noalias)
 type AccountKeeper interface {
+	address.Codec
+
 	IterateAccounts(ctx context.Context, process func(sdk.AccountI) (stop bool))
 	GetAccount(ctx context.Context, addr sdk.AccAddress) sdk.AccountI // only used for simulation
 
@@ -35,18 +38,18 @@ type AuthzKeeper interface {
 
 // BankKeeper defines the expected interface needed to retrieve account balances.
 type BankKeeper interface {
-	GetAllBalances(ctx sdk.Context, addr sdk.AccAddress) sdk.Coins
-	GetBalance(ctx sdk.Context, addr sdk.AccAddress, denom string) sdk.Coin
-	LockedCoins(ctx sdk.Context, addr sdk.AccAddress) sdk.Coins
-	SpendableCoins(ctx sdk.Context, addr sdk.AccAddress) sdk.Coins
+	GetAllBalances(ctx context.Context, addr sdk.AccAddress) sdk.Coins
+	GetBalance(ctx context.Context, addr sdk.AccAddress, denom string) sdk.Coin
+	LockedCoins(ctx context.Context, addr sdk.AccAddress) sdk.Coins
+	SpendableCoins(ctx context.Context, addr sdk.AccAddress) sdk.Coins
 
-	GetSupply(ctx sdk.Context, denom string) sdk.Coin
+	GetSupply(ctx context.Context, denom string) sdk.Coin
 
-	SendCoinsFromModuleToModule(ctx sdk.Context, senderPool, recipientPool string, amt sdk.Coins) error
-	UndelegateCoinsFromModuleToAccount(ctx sdk.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error
-	DelegateCoinsFromAccountToModule(ctx sdk.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error
+	SendCoinsFromModuleToModule(ctx context.Context, senderPool, recipientPool string, amt sdk.Coins) error
+	UndelegateCoinsFromModuleToAccount(ctx context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error
+	DelegateCoinsFromAccountToModule(ctx context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error
 
-	BurnCoins(ctx sdk.Context, name string, amt sdk.Coins) error
+	BurnCoins(ctx context.Context, name string, amt sdk.Coins) error
 }
 
 // ValidatorSet expected properties for the set of all validators (noalias)
@@ -69,8 +72,8 @@ type ValidatorSet interface {
 	StakingTokenSupply(sdk.Context) math.Int                     // total staking token supply
 
 	// slash the validator and delegators of the validator, specifying offense height, offense power, and slash fraction
-	Slash(sdk.Context, sdk.ConsAddress, int64, int64, sdk.Dec) math.Int
-	SlashWithInfractionReason(sdk.Context, sdk.ConsAddress, int64, int64, sdk.Dec, Infraction) math.Int
+	Slash(sdk.Context, sdk.ConsAddress, int64, int64, math.LegacyDec) math.Int
+	SlashWithInfractionReason(sdk.Context, sdk.ConsAddress, int64, int64, math.LegacyDec, Infraction) math.Int
 	Jail(sdk.Context, sdk.ConsAddress)   // jail a validator
 	Unjail(sdk.Context, sdk.ConsAddress) // unjail a validator
 
@@ -111,7 +114,8 @@ type StakingHooks interface {
 	BeforeDelegationSharesModified(ctx sdk.Context, delAddr, valAddr sdk.AccAddress) error // Must be called when a delegation's shares are modified
 	BeforeDelegationRemoved(ctx sdk.Context, delAddr, valAddr sdk.AccAddress) error        // Must be called when a delegation is removed
 	AfterDelegationModified(ctx sdk.Context, delAddr, valAddr sdk.AccAddress) error
-	BeforeValidatorSlashed(ctx sdk.Context, valAddr sdk.AccAddress, fraction sdk.Dec) error
+	BeforeValidatorSlashed(ctx sdk.Context, valAddr sdk.AccAddress, fraction math.LegacyDec) error
+
 	AfterUnbondingInitiated(ctx sdk.Context, id uint64) error
 }
 

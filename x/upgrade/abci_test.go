@@ -5,23 +5,22 @@ import (
 	"testing"
 	"time"
 
-	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
-
 	"cosmossdk.io/core/appmodule"
 	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
-	"cosmossdk.io/x/upgrade"
-	"cosmossdk.io/x/upgrade/keeper"
-	"cosmossdk.io/x/upgrade/types"
-
+	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
 	govtypesv1beta1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
+	"cosmossdk.io/x/upgrade"
+	"cosmossdk.io/x/upgrade/keeper"
+	"cosmossdk.io/x/upgrade/types"
 )
 
 type TestSuite struct {
@@ -54,7 +53,8 @@ func setupTest(t *testing.T, height int64) *TestSuite {
 
 	s.ctx = testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: time.Now(), Height: height})
 
-	s.module = upgrade.NewAppModule(s.keeper)
+	s.module = upgrade.NewAppModule(s.keeper, nil)
+	//s.handler = upgrade.NewSoftwareUpgradeProposalHandler(s.keeper)
 	return &s
 }
 
@@ -284,8 +284,101 @@ func TestBinaryVersion(t *testing.T) {
 	for _, tc := range testCases {
 		ctx := tc.preRun()
 
-		require.NotPanics(t, func() {
-			s.module.BeginBlock(ctx)
-		})
+		if tc.expectPanic {
+			require.Panics(t, func() {
+				s.module.BeginBlock(ctx)
+			})
+		} else {
+			require.NotPanics(t, func() {
+				s.module.BeginBlock(ctx)
+			})
+		}
 	}
 }
+
+//
+//func TestDowngradeVerification(t *testing.T) {
+//	// could not use setupTest() here, because we have to use the same key
+//	// for the two keepers.
+//	encCfg := moduletestutil.MakeTestEncodingConfig(upgrade.AppModuleBasic{})
+//	key := storetypes.NewKVStoreKey(types.StoreKey)
+//	testCtx := testutil.DefaultContextWithDB(s.T(), key, storetypes.NewTransientStoreKey("transient_test"))
+//	ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: time.Now(), Height: 10})
+//
+//	skip := map[int64]bool{}
+//	tempDir := t.TempDir()
+//	k := keeper.NewKeeper(skip, key, encCfg.Codec, tempDir, nil, authtypes.NewModuleAddress(govtypes.ModuleName).String())
+//	m := upgrade.NewAppModule(k, addresscodec.NewBech32Codec("cosmos"))
+//	handler := upgrade.NewSoftwareUpgradeProposalHandler(k)
+//
+//	// submit a plan.
+//	planName := "downgrade"
+//	err := handler(ctx, &types.SoftwareUpgradeProposal{Title: "test", Plan: types.Plan{Name: planName, Height: ctx.BlockHeight() + 1}}) //nolint:staticcheck // we're testing deprecated code
+//	require.NoError(t, err)
+//	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 1)
+//
+//	// set the handler.
+//	k.SetUpgradeHandler(planName, func(ctx sdk.Context, plan types.Plan, vm module.VersionMap) (module.VersionMap, error) {
+//		return vm, nil
+//	})
+//
+//	// successful upgrade.
+//	require.NotPanics(t, func() {
+//		m.BeginBlock(ctx)
+//	})
+//	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 1)
+//
+//	testCases := map[string]struct {
+//		preRun      func(*keeper.Keeper, sdk.Context, string)
+//		expectPanic bool
+//	}{
+//		"valid binary": {
+//			preRun: func(k *keeper.Keeper, ctx sdk.Context, name string) {
+//				k.SetUpgradeHandler(planName, func(ctx sdk.Context, plan types.Plan, vm module.VersionMap) (module.VersionMap, error) {
+//					return vm, nil
+//				})
+//			},
+//		},
+//		"downgrade with an active plan": {
+//			preRun: func(k *keeper.Keeper, ctx sdk.Context, name string) {
+//				handler := upgrade.NewSoftwareUpgradeProposalHandler(k)
+//				err := handler(ctx, &types.SoftwareUpgradeProposal{Title: "test", Plan: types.Plan{Name: "another" + planName, Height: ctx.BlockHeight() + 1}}) //nolint:staticcheck // we're testing deprecated code
+//				require.NoError(t, err, name)
+//			},
+//			expectPanic: true,
+//		},
+//		"downgrade without any active plan": {
+//			expectPanic: true,
+//		},
+//	}
+//
+//	for name, tc := range testCases {
+//		ctx, _ := ctx.CacheContext()
+//
+//		// downgrade. now keeper does not have the handler.
+//		k := keeper.NewKeeper(skip, key, encCfg.Codec, tempDir, nil, authtypes.NewModuleAddress(govtypes.ModuleName).String())
+//		m := upgrade.NewAppModule(k, addresscodec.NewBech32Codec("cosmos"))
+//
+//		// assertions
+//		lastAppliedPlan, _ := k.GetLastCompletedUpgrade(ctx)
+//		require.Equal(t, planName, lastAppliedPlan)
+//		require.False(t, k.HasHandler(planName))
+//		require.False(t, k.DowngradeVerified())
+//		_, found := k.GetUpgradePlan(ctx)
+//		require.False(t, found)
+//
+//		if tc.preRun != nil {
+//			tc.preRun(k, ctx, name)
+//		}
+//
+//		if tc.expectPanic {
+//			require.Panics(t, func() {
+//				m.BeginBlock(ctx)
+//			}, name)
+//		} else {
+//			require.NotPanics(t, func() {
+//				m.BeginBlock(ctx)
+//			}, name)
+//		}
+//	}
+//}

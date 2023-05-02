@@ -43,7 +43,7 @@ func TestRandomizedGenState(t *testing.T) {
 	simState.Cdc.MustUnmarshalJSON(simState.GenState[types.ModuleName], &bankGenesis)
 
 	assert.Equal(t, true, bankGenesis.Params.GetDefaultSendEnabled(), "Params.GetDefaultSendEnabled")
-	assert.Len(t, bankGenesis.Params.GetSendEnabled(), 0, "Params.GetSendEnabled") //nolint:staticcheck
+	assert.Len(t, bankGenesis.Params.GetSendEnabled(), 0, "Params.GetSendEnabled") //nolint:staticcheck // we're testing deprecated code here
 	if assert.Len(t, bankGenesis.Balances, 3) {
 		assert.Equal(t, "0xd4BFb1CB895840ca474b0D15abb11Cf0f26bc88a", bankGenesis.Balances[2].GetAddress().String(), "Balances[2] address")
 		assert.Equal(t, "1000stake", bankGenesis.Balances[2].GetCoins().String(), "Balances[2] coins")

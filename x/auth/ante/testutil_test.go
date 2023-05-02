@@ -155,7 +155,10 @@ func (suite *AnteTestSuite) DeliverMsgs(t *testing.T, privs []cryptotypes.PrivKe
 
 	tx, txErr := suite.CreateTestTx(suite.ctx, privs, accNums, accSeqs, chainID, signing.SignMode_SIGN_MODE_EIP_712)
 	require.NoError(t, txErr)
-	return suite.anteHandler(suite.ctx, tx, simulate)
+	txBytes, err := suite.clientCtx.TxConfig.TxEncoder()(tx)
+	bytesCtx := suite.ctx.WithTxBytes(txBytes)
+	require.NoError(t, err)
+	return suite.anteHandler(bytesCtx, tx, simulate)
 }
 
 func (suite *AnteTestSuite) RunTestCase(t *testing.T, tc TestCase, args TestCaseArgs) {
@@ -167,7 +170,10 @@ func (suite *AnteTestSuite) RunTestCase(t *testing.T, tc TestCase, args TestCase
 	// ante handlers, but here we sometimes also test the tx creation
 	// process.
 	tx, txErr := suite.CreateTestTx(suite.ctx, args.privs, args.accNums, args.accSeqs, args.chainID, signing.SignMode_SIGN_MODE_EIP_712)
-	newCtx, anteErr := suite.anteHandler(suite.ctx, tx, tc.simulate)
+	txBytes, err := suite.clientCtx.TxConfig.TxEncoder()(tx)
+	require.NoError(t, err)
+	bytesCtx := suite.ctx.WithTxBytes(txBytes)
+	newCtx, anteErr := suite.anteHandler(bytesCtx, tx, tc.simulate)
 
 	if tc.expPass {
 		require.NoError(t, txErr)

@@ -3,6 +3,9 @@ package bank_test
 import (
 	"testing"
 
+	"cosmossdk.io/depinject"
+	"cosmossdk.io/log"
+	sdkmath "cosmossdk.io/math"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -112,18 +115,22 @@ func createTestSuite(t *testing.T, genesisAccounts []authtypes.GenesisAccount) s
 	startupCfg := simtestutil.DefaultStartUpConfig()
 	startupCfg.GenesisAccounts = genAccounts
 
-	app, err := simtestutil.SetupWithConfiguration(configurator.NewAppConfig(
-		configurator.ParamsModule(),
-		configurator.AuthModule(),
-		configurator.AuthzModule(),
-		configurator.StakingModule(),
-		configurator.TxModule(),
-		configurator.ConsensusModule(),
-		configurator.BankModule(),
-		configurator.GovModule(),
-		configurator.CrossChainModule(),
-		configurator.DistributionModule(),
-	),
+	app, err := simtestutil.SetupWithConfiguration(
+		depinject.Configs(
+			configurator.NewAppConfig(
+				configurator.ParamsModule(),
+				configurator.AuthModule(),
+				configurator.AuthzModule(),
+				configurator.StakingModule(),
+				configurator.TxModule(),
+				configurator.ConsensusModule(),
+				configurator.BankModule(),
+				configurator.GovModule(),
+				configurator.CrossChainModule(),
+				configurator.DistributionModule(),
+			),
+			depinject.Supply(log.NewNopLogger()),
+		),
 		startupCfg, &res.BankKeeper, &res.AccountKeeper, &res.DistributionKeeper)
 
 	res.App = app
@@ -148,7 +155,7 @@ func TestSendNotEnoughBalance(t *testing.T) {
 	baseApp := s.App.BaseApp
 	ctx := baseApp.NewContext(false, cmtproto.Header{ChainID: sdktestutil.DefaultChainId})
 
-	require.NoError(t, testutil.FundAccount(s.BankKeeper, ctx, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 67))))
+	require.NoError(t, testutil.FundAccount(ctx, s.BankKeeper, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 67))))
 
 	baseApp.Commit()
 
@@ -185,7 +192,7 @@ func TestMsgMultiSendWithAccounts(t *testing.T) {
 	baseApp := s.App.BaseApp
 	ctx := baseApp.NewContext(false, cmtproto.Header{ChainID: sdktestutil.DefaultChainId})
 
-	require.NoError(t, testutil.FundAccount(s.BankKeeper, ctx, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 67))))
+	require.NoError(t, testutil.FundAccount(ctx, s.BankKeeper, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 67))))
 
 	baseApp.Commit()
 
@@ -265,9 +272,9 @@ func TestMsgMultiSendMultipleOut(t *testing.T) {
 	baseApp := s.App.BaseApp
 	ctx := baseApp.NewContext(false, cmtproto.Header{ChainID: sdktestutil.DefaultChainId})
 
-	require.NoError(t, testutil.FundAccount(s.BankKeeper, ctx, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 42))))
+	require.NoError(t, testutil.FundAccount(ctx, s.BankKeeper, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 42))))
 
-	require.NoError(t, testutil.FundAccount(s.BankKeeper, ctx, addr2, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 42))))
+	require.NoError(t, testutil.FundAccount(ctx, s.BankKeeper, addr2, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 42))))
 
 	baseApp.Commit()
 
@@ -310,7 +317,7 @@ func TestMsgMultiSendDependent(t *testing.T) {
 	baseApp := s.App.BaseApp
 	ctx := baseApp.NewContext(false, cmtproto.Header{ChainID: sdktestutil.DefaultChainId})
 
-	require.NoError(t, testutil.FundAccount(s.BankKeeper, ctx, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 42))))
+	require.NoError(t, testutil.FundAccount(ctx, s.BankKeeper, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 42))))
 
 	baseApp.Commit()
 
@@ -359,14 +366,14 @@ func TestMsgSetSendEnabled(t *testing.T) {
 	s := createTestSuite(t, genAccs)
 
 	ctx := s.App.BaseApp.NewContext(false, cmtproto.Header{ChainID: sdktestutil.DefaultChainId})
-	require.NoError(t, testutil.FundAccount(s.BankKeeper, ctx, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 101))))
+	require.NoError(t, testutil.FundAccount(ctx, s.BankKeeper, addr1, sdk.NewCoins(sdk.NewInt64Coin("foocoin", 101))))
 	addr1Str := addr1.String()
 	govAddr := s.BankKeeper.GetAuthority()
 	goodGovProp, err := govv1.NewMsgSubmitProposal(
 		[]sdk.Msg{
 			types.NewMsgSetSendEnabled(govAddr, nil, nil),
 		},
-		sdk.Coins{{Denom: "foocoin", Amount: sdk.NewInt(5)}},
+		sdk.Coins{{Denom: "foocoin", Amount: sdkmath.NewInt(5)}},
 		addr1Str,
 		"set default send enabled to true",
 		"Change send enabled",
@@ -374,18 +381,6 @@ func TestMsgSetSendEnabled(t *testing.T) {
 		false,
 	)
 	require.NoError(t, err, "making goodGovProp")
-	badGovProp, err := govv1.NewMsgSubmitProposal(
-		[]sdk.Msg{
-			types.NewMsgSetSendEnabled(govAddr, []*types.SendEnabled{{Denom: "bad coin name!", Enabled: true}}, nil),
-		},
-		sdk.Coins{{Denom: "foocoin", Amount: sdk.NewInt(5)}},
-		addr1Str,
-		"set default send enabled to true",
-		"Change send enabled",
-		"Modify send enabled and set to true",
-		false,
-	)
-	require.NoError(t, err, "making badGovProp")
 
 	testCases := []appTestCase{
 		{
@@ -427,19 +422,6 @@ func TestMsgSetSendEnabled(t *testing.T) {
 			},
 			accSeqs:    []uint64{1},
 			expInError: nil,
-		},
-		{
-			desc:       "submitted bad as gov prop",
-			expSimPass: false,
-			expPass:    false,
-			msgs: []sdk.Msg{
-				badGovProp,
-			},
-			accSeqs: []uint64{2},
-			expInError: []string{
-				"invalid denom: bad coin name!",
-				"invalid proposal message",
-			},
 		},
 	}
 

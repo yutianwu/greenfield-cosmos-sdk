@@ -1,14 +1,15 @@
 package tx_test
 
 import (
-	gocontext "context"
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 
-	sdkmath "cosmossdk.io/math"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+
+	sdkmath "cosmossdk.io/math"
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/tx"
@@ -29,7 +30,7 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 )
 
-func newTestTxConfig(t *testing.T) (client.TxConfig, codec.Codec) {
+func newTestTxConfig() (client.TxConfig, codec.Codec) {
 	encodingConfig := moduletestutil.MakeTestEncodingConfig()
 	return authtx.NewTxConfig(codec.NewProtoCodec(encodingConfig.InterfaceRegistry), authtx.DefaultSignModes), encodingConfig.Codec
 }
@@ -41,7 +42,7 @@ type mockContext struct {
 	wantErr bool
 }
 
-func (m mockContext) Invoke(grpcCtx gocontext.Context, method string, req, reply interface{}, opts ...grpc.CallOption) (err error) {
+func (m mockContext) Invoke(_ context.Context, _ string, _, reply interface{}, _ ...grpc.CallOption) (err error) {
 	if m.wantErr {
 		return fmt.Errorf("mock err")
 	}
@@ -54,7 +55,7 @@ func (m mockContext) Invoke(grpcCtx gocontext.Context, method string, req, reply
 	return nil
 }
 
-func (mockContext) NewStream(gocontext.Context, *grpc.StreamDesc, string, ...grpc.CallOption) (grpc.ClientStream, error) {
+func (mockContext) NewStream(context.Context, *grpc.StreamDesc, string, ...grpc.CallOption) (grpc.ClientStream, error) {
 	panic("not implemented")
 }
 
@@ -78,11 +79,13 @@ func TestCalculateGas(t *testing.T) {
 
 	for _, tc := range testCases {
 		stc := tc
-		txCfg, _ := newTestTxConfig(t)
+		txCfg, _ := newTestTxConfig()
+		defaultSignMode, err := signing.APISignModeToInternal(txCfg.SignModeHandler().DefaultMode())
+		require.NoError(t, err)
 
 		txf := tx.Factory{}.
 			WithChainID(sdktestutil.DefaultChainId).
-			WithTxConfig(txCfg).WithSignMode(txCfg.SignModeHandler().DefaultMode())
+			WithTxConfig(txCfg).WithSignMode(defaultSignMode)
 
 		t.Run(stc.name, func(t *testing.T) {
 			mockClientCtx := mockContext{
@@ -104,7 +107,9 @@ func TestCalculateGas(t *testing.T) {
 }
 
 func TestBuildSimTx(t *testing.T) {
-	txCfg, cdc := newTestTxConfig(t)
+	txCfg, cdc := newTestTxConfig()
+	defaultSignMode, err := signing.APISignModeToInternal(txCfg.SignModeHandler().DefaultMode())
+	require.NoError(t, err)
 
 	kb, err := keyring.New(t.Name(), "test", t.TempDir(), nil, cdc)
 	require.NoError(t, err)
@@ -120,7 +125,7 @@ func TestBuildSimTx(t *testing.T) {
 		WithFees("50stake").
 		WithMemo("memo").
 		WithChainID(sdktestutil.DefaultChainId).
-		WithSignMode(txCfg.SignModeHandler().DefaultMode()).
+		WithSignMode(defaultSignMode).
 		WithKeybase(kb)
 
 	msg := banktypes.NewMsgSend(sdk.AccAddress("from"), sdk.AccAddress("to"), nil)
@@ -130,7 +135,7 @@ func TestBuildSimTx(t *testing.T) {
 }
 
 func TestBuildUnsignedTx(t *testing.T) {
-	txConfig, cdc := newTestTxConfig(t)
+	txConfig, cdc := newTestTxConfig()
 	kb, err := keyring.New(t.Name(), "test", t.TempDir(), nil, cdc)
 	require.NoError(t, err)
 
@@ -159,7 +164,7 @@ func TestBuildUnsignedTx(t *testing.T) {
 }
 
 func TestMnemonicInMemo(t *testing.T) {
-	txConfig, cdc := newTestTxConfig(t)
+	txConfig, cdc := newTestTxConfig()
 	kb, err := keyring.New(t.Name(), "test", t.TempDir(), nil, cdc)
 	require.NoError(t, err)
 
@@ -208,7 +213,7 @@ func TestMnemonicInMemo(t *testing.T) {
 }
 
 func TestSign(t *testing.T) {
-	txConfig, cdc := newTestTxConfig(t)
+	txConfig, cdc := newTestTxConfig()
 	requireT := require.New(t)
 	path := hd.CreateHDPath(118, 0, 0).String()
 	kb, err := keyring.New(t.Name(), "test", t.TempDir(), nil, cdc)
@@ -348,7 +353,7 @@ func TestSign(t *testing.T) {
 	var prevSigs []signingtypes.SignatureV2
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err = tx.Sign(nil, tc.txf, tc.from, tc.txb, tc.overwrite) //nolint:staticcheck
+			err = tx.Sign(context.TODO(), tc.txf, tc.from, tc.txb, tc.overwrite)
 			if len(tc.expectedPKs) == 0 {
 				requireT.Error(err)
 			} else {
@@ -364,7 +369,7 @@ func TestSign(t *testing.T) {
 }
 
 func TestPreprocessHook(t *testing.T) {
-	txConfig, cdc := newTestTxConfig(t)
+	txConfig, cdc := newTestTxConfig()
 	requireT := require.New(t)
 	path := hd.CreateHDPath(118, 0, 0).String()
 	kb, err := keyring.New(t.Name(), "test", t.TempDir(), nil, cdc)
@@ -419,7 +424,7 @@ func TestPreprocessHook(t *testing.T) {
 	txb, err := txfDirect.BuildUnsignedTx(msg1, msg2)
 	requireT.NoError(err)
 
-	err = tx.Sign(nil, txfDirect, from, txb, false) //nolint:staticcheck
+	err = tx.Sign(context.TODO(), txfDirect, from, txb, false)
 	requireT.NoError(err)
 
 	// Run preprocessing

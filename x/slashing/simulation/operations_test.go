@@ -11,8 +11,11 @@ import (
 	cmttypes "github.com/cometbft/cometbft/types"
 	"github.com/stretchr/testify/suite"
 
+	"cosmossdk.io/depinject"
+	"cosmossdk.io/log"
 	"cosmossdk.io/math"
 
+	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
@@ -47,6 +50,7 @@ type SimTestSuite struct {
 	legacyAmino       *codec.LegacyAmino
 	codec             codec.Codec
 	interfaceRegistry codectypes.InterfaceRegistry
+	txConfig          client.TxConfig
 	accountKeeper     authkeeper.AccountKeeper
 	bankKeeper        bankkeeper.Keeper
 	stakingKeeper     *stakingkeeper.Keeper
@@ -77,11 +81,15 @@ func (suite *SimTestSuite) SetupTest() {
 	startupCfg.ValidatorSet = createValidator
 
 	app, err := simtestutil.SetupWithConfiguration(
-		testutil.AppConfig,
+		depinject.Configs(
+			testutil.AppConfig,
+			depinject.Supply(log.NewNopLogger()),
+		),
 		startupCfg,
 		&suite.legacyAmino,
 		&suite.codec,
 		&suite.interfaceRegistry,
+		&suite.txConfig,
 		&suite.accountKeeper,
 		&suite.bankKeeper,
 		&suite.stakingKeeper,
@@ -104,7 +112,7 @@ func (suite *SimTestSuite) SetupTest() {
 	for _, account := range suite.accounts {
 		acc := suite.accountKeeper.NewAccountWithAddress(suite.ctx, account.Address)
 		suite.accountKeeper.SetAccount(suite.ctx, acc)
-		suite.Require().NoError(banktestutil.FundAccount(suite.bankKeeper, suite.ctx, account.Address, initCoins))
+		suite.Require().NoError(banktestutil.FundAccount(suite.ctx, suite.bankKeeper, account.Address, initCoins))
 	}
 
 	suite.mintKeeper.SetParams(suite.ctx, minttypes.DefaultParams())
@@ -128,8 +136,8 @@ func (suite *SimTestSuite) TestWeightedOperations() {
 		{simulation.DefaultWeightMsgUnjail, types.ModuleName, sdk.MsgTypeURL(&types.MsgUnjail{})},
 	}
 
-	weightesOps := simulation.WeightedOperations(appParams, suite.codec, suite.accountKeeper, suite.bankKeeper, suite.slashingKeeper, suite.stakingKeeper)
-	for i, w := range weightesOps {
+	weightedOps := simulation.WeightedOperations(suite.interfaceRegistry, appParams, suite.codec, suite.txConfig, suite.accountKeeper, suite.bankKeeper, suite.slashingKeeper, suite.stakingKeeper)
+	for i, w := range weightedOps {
 		operationMsg, _, err := w.Op()(suite.r, suite.app.BaseApp, ctx, suite.accounts, ctx.ChainID())
 		suite.Require().NoError(err)
 
@@ -183,7 +191,7 @@ func (suite *SimTestSuite) TestSimulateMsgUnjail() {
 	})
 
 	// execute operation
-	op := simulation.SimulateMsgUnjail(codec.NewProtoCodec(suite.interfaceRegistry), suite.accountKeeper, suite.bankKeeper, suite.slashingKeeper, suite.stakingKeeper)
+	op := simulation.SimulateMsgUnjail(codec.NewProtoCodec(suite.interfaceRegistry), suite.txConfig, suite.accountKeeper, suite.bankKeeper, suite.slashingKeeper, suite.stakingKeeper)
 	operationMsg, futureOperations, err := op(suite.r, suite.app.BaseApp, ctx, suite.accounts, sdktestutil.DefaultChainId)
 	suite.Require().NoError(err)
 
@@ -215,7 +223,7 @@ func getTestingValidator(ctx sdk.Context, stakingKeeper *stakingkeeper.Keeper, a
 	}
 
 	validator.DelegatorShares = math.LegacyNewDec(100)
-	validator.Tokens = sdk.NewInt(1000000)
+	validator.Tokens = math.NewInt(1000000)
 
 	stakingKeeper.SetValidator(ctx, validator)
 

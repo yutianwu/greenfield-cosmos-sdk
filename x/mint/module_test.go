@@ -3,6 +3,8 @@ package mint_test
 import (
 	"testing"
 
+	"cosmossdk.io/depinject"
+	"cosmossdk.io/log"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/stretchr/testify/require"
 
@@ -18,7 +20,11 @@ func TestItCreatesModuleAccountOnInitBlock(t *testing.T) {
 	var accountKeeper authkeeper.AccountKeeper
 	var authzKeeper authzkeeper.Keeper
 
-	app, err := simtestutil.SetupAtGenesis(testutil.AppConfig, &accountKeeper, &authzKeeper)
+	app, err := simtestutil.SetupAtGenesis(
+		depinject.Configs(
+			testutil.AppConfig,
+			depinject.Supply(log.NewNopLogger()),
+		), &accountKeeper, &authzKeeper)
 	require.NoError(t, err)
 
 	ctx := app.BaseApp.NewContext(false, cmtproto.Header{})

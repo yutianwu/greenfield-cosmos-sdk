@@ -1,13 +1,13 @@
 package cli_test
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"path/filepath"
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
 	abci "github.com/cometbft/cometbft/abci/types"
 	rpcclientmock "github.com/cometbft/cometbft/rpc/client/mock"
 	"github.com/stretchr/testify/suite"
@@ -52,7 +52,6 @@ func (s *CLITestSuite) SetupSuite() {
 		WithOutput(io.Discard).
 		WithChainID(sdktestutil.DefaultChainId)
 
-	var outBuf bytes.Buffer
 	ctxGen := func() client.Context {
 		bz, _ := s.encCfg.Codec.Marshal(&sdk.TxResponse{})
 		c := clitestutil.NewMockCometRPC(abci.ResponseQuery{
@@ -60,11 +59,11 @@ func (s *CLITestSuite) SetupSuite() {
 		})
 		return s.baseCtx.WithClient(c)
 	}
-	s.clientCtx = ctxGen().WithOutput(&outBuf)
+	s.clientCtx = ctxGen()
 }
 
 func (s *CLITestSuite) TestGenTxCmd() {
-	amount := sdk.NewCoin("stake", sdk.NewInt(12))
+	amount := sdk.NewCoin("stake", sdkmath.NewInt(12))
 
 	tests := []struct {
 		name         string

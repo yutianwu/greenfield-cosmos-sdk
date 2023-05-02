@@ -19,7 +19,7 @@ type AccountKeeper interface {
 
 // FeegrantKeeper defines the expected feegrant keeper.
 type FeegrantKeeper interface {
-	UseGrantedFees(ctx sdk.Context, granter, grantee sdk.AccAddress, fee sdk.Coins, msgs []sdk.Msg) error
+	UseGrantedFees(ctx context.Context, granter, grantee sdk.AccAddress, fee sdk.Coins, msgs []sdk.Msg) error
 }
 
 // GashubKeeper defines the expected gashub keeper.

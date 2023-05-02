@@ -7,9 +7,9 @@ import (
 	"cosmossdk.io/math"
 	"cosmossdk.io/simapp"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	"github.com/stretchr/testify/require"
 	"gotest.tools/v3/assert"
 
-	sdktestutil "github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	banktestutil "github.com/cosmos/cosmos-sdk/x/bank/testutil"
 	"github.com/cosmos/cosmos-sdk/x/staking/keeper"
@@ -27,7 +27,7 @@ func bootstrapSlashTest(t *testing.T, power int64) (*simapp.SimApp, sdk.Context,
 	totalSupply := sdk.NewCoins(sdk.NewCoin(app.StakingKeeper.BondDenom(ctx), amt.MulRaw(int64(len(addrDels)))))
 
 	notBondedPool := app.StakingKeeper.GetNotBondedPool(ctx)
-	assert.NilError(t, banktestutil.FundModuleAccount(app.BankKeeper, ctx, notBondedPool.GetName(), totalSupply))
+	assert.NilError(t, banktestutil.FundModuleAccount(ctx, app.BankKeeper, notBondedPool.GetName(), totalSupply))
 
 	app.AccountKeeper.SetModuleAccount(ctx, notBondedPool)
 
@@ -37,7 +37,7 @@ func bootstrapSlashTest(t *testing.T, power int64) (*simapp.SimApp, sdk.Context,
 
 	// set bonded pool balance
 	app.AccountKeeper.SetModuleAccount(ctx, bondedPool)
-	assert.NilError(t, banktestutil.FundModuleAccount(app.BankKeeper, ctx, bondedPool.GetName(), bondedCoins))
+	assert.NilError(t, banktestutil.FundModuleAccount(ctx, app.BankKeeper, bondedPool.GetName(), bondedCoins))
 
 	for i := int64(0); i < numVals; i++ {
 		validator := testutil.NewValidator(t, addrVals[i], PKs[i])
@@ -103,7 +103,7 @@ func TestSlashRedelegation(t *testing.T) {
 	bondedPool := app.StakingKeeper.GetBondedPool(ctx)
 	_ = app.BankKeeper.GetAllBalances(ctx, bondedPool.GetAddress())
 
-	assert.NilError(t, banktestutil.FundModuleAccount(app.BankKeeper, ctx, bondedPool.GetName(), startCoins))
+	assert.NilError(t, banktestutil.FundModuleAccount(ctx, app.BankKeeper, bondedPool.GetName(), startCoins))
 	app.AccountKeeper.SetModuleAccount(ctx, bondedPool)
 
 	// set a redelegation with an expiration timestamp beyond which the
@@ -370,7 +370,7 @@ func TestSlashWithRedelegation(t *testing.T) {
 	notBondedPool := app.StakingKeeper.GetNotBondedPool(ctx)
 	rdCoins := sdk.NewCoins(sdk.NewCoin(bondDenom, rdTokens.MulRaw(2)))
 
-	assert.NilError(t, banktestutil.FundModuleAccount(app.BankKeeper, ctx, bondedPool.GetName(), rdCoins))
+	assert.NilError(t, banktestutil.FundModuleAccount(ctx, app.BankKeeper, bondedPool.GetName(), rdCoins))
 
 	app.AccountKeeper.SetModuleAccount(ctx, bondedPool)
 
@@ -382,7 +382,7 @@ func TestSlashWithRedelegation(t *testing.T) {
 	_, found := app.StakingKeeper.GetValidatorByConsAddr(ctx, consAddr)
 	assert.Assert(t, found)
 
-	sdktestutil.AssertNotPanics(t, func() {
+	require.NotPanics(t, func() {
 		app.StakingKeeper.Slash(ctx, consAddr, 10, 10, fraction)
 	})
 	burnAmount := sdk.NewDecFromInt(app.StakingKeeper.TokensFromConsensusPower(ctx, 10)).Mul(fraction).TruncateInt()
@@ -415,7 +415,7 @@ func TestSlashWithRedelegation(t *testing.T) {
 	_, found = app.StakingKeeper.GetValidatorByConsAddr(ctx, consAddr)
 	assert.Assert(t, found)
 
-	sdktestutil.AssertNotPanics(t, func() {
+	require.NotPanics(t, func() {
 		app.StakingKeeper.Slash(ctx, consAddr, 10, 10, math.LegacyOneDec())
 	})
 	burnAmount = app.StakingKeeper.TokensFromConsensusPower(ctx, 7)
@@ -451,7 +451,7 @@ func TestSlashWithRedelegation(t *testing.T) {
 	_, found = app.StakingKeeper.GetValidatorByConsAddr(ctx, consAddr)
 	assert.Assert(t, found)
 
-	sdktestutil.AssertNotPanics(t, func() {
+	require.NotPanics(t, func() {
 		app.StakingKeeper.Slash(ctx, consAddr, 10, 10, math.LegacyOneDec())
 	})
 
@@ -486,7 +486,7 @@ func TestSlashWithRedelegation(t *testing.T) {
 	validator, _ = app.StakingKeeper.GetValidatorByConsAddr(ctx, consAddr)
 	assert.Equal(t, validator.GetStatus(), types.Unbonding)
 
-	sdktestutil.AssertNotPanics(t, func() {
+	require.NotPanics(t, func() {
 		app.StakingKeeper.Slash(ctx, consAddr, 10, 10, math.LegacyOneDec())
 	})
 
@@ -539,8 +539,8 @@ func TestSlashBoth(t *testing.T) {
 	bondedPool := app.StakingKeeper.GetBondedPool(ctx)
 	notBondedPool := app.StakingKeeper.GetNotBondedPool(ctx)
 
-	assert.NilError(t, banktestutil.FundModuleAccount(app.BankKeeper, ctx, bondedPool.GetName(), bondedCoins))
-	assert.NilError(t, banktestutil.FundModuleAccount(app.BankKeeper, ctx, notBondedPool.GetName(), notBondedCoins))
+	assert.NilError(t, banktestutil.FundModuleAccount(ctx, app.BankKeeper, bondedPool.GetName(), bondedCoins))
+	assert.NilError(t, banktestutil.FundModuleAccount(ctx, app.BankKeeper, notBondedPool.GetName(), notBondedCoins))
 
 	app.AccountKeeper.SetModuleAccount(ctx, bondedPool)
 	app.AccountKeeper.SetModuleAccount(ctx, notBondedPool)

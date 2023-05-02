@@ -8,10 +8,10 @@ import (
 	"github.com/prysmaticlabs/prysm/crypto/bls"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
+	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	moduletestutil "github.com/cosmos/cosmos-sdk/types/module/testutil"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	"github.com/cosmos/cosmos-sdk/x/simulation"
 	"github.com/cosmos/cosmos-sdk/x/staking/keeper"
@@ -19,8 +19,6 @@ import (
 )
 
 // Simulation operation weights constants
-//
-//nolint:gosec // these are not hardcoded credentials
 const (
 	DefaultWeightMsgCreateValidator           int = 100
 	DefaultWeightMsgEditValidator             int = 5
@@ -38,8 +36,12 @@ const (
 
 // WeightedOperations returns all the operations from the module with their respective weights
 func WeightedOperations(
-	appParams simtypes.AppParams, cdc codec.JSONCodec, ak types.AccountKeeper,
-	bk types.BankKeeper, k *keeper.Keeper,
+	appParams simtypes.AppParams,
+	cdc codec.JSONCodec,
+	txGen client.TxConfig,
+	ak types.AccountKeeper,
+	bk types.BankKeeper,
+	k *keeper.Keeper,
 ) simulation.WeightedOperations {
 	var (
 		weightMsgEditValidator             int
@@ -82,29 +84,34 @@ func WeightedOperations(
 	return simulation.WeightedOperations{
 		simulation.NewWeightedOperation(
 			weightMsgEditValidator,
-			SimulateMsgEditValidator(ak, bk, k),
+			SimulateMsgEditValidator(txGen, ak, bk, k),
 		),
 		simulation.NewWeightedOperation(
 			weightMsgDelegate,
-			SimulateMsgDelegate(ak, bk, k),
+			SimulateMsgDelegate(txGen, ak, bk, k),
 		),
 		simulation.NewWeightedOperation(
 			weightMsgUndelegate,
-			SimulateMsgUndelegate(ak, bk, k),
+			SimulateMsgUndelegate(txGen, ak, bk, k),
 		),
 		simulation.NewWeightedOperation(
 			weightMsgBeginRedelegate,
-			SimulateMsgBeginRedelegate(ak, bk, k),
+			SimulateMsgBeginRedelegate(txGen, ak, bk, k),
 		),
 		simulation.NewWeightedOperation(
 			weightMsgCancelUnbondingDelegation,
-			SimulateMsgCancelUnbondingDelegate(ak, bk, k),
+			SimulateMsgCancelUnbondingDelegate(txGen, ak, bk, k),
 		),
 	}
 }
 
 // SimulateMsgCreateValidator generates a MsgCreateValidator with random values
-func SimulateMsgCreateValidator(ak types.AccountKeeper, bk types.BankKeeper, k *keeper.Keeper) simtypes.Operation {
+func SimulateMsgCreateValidator(
+	txGen client.TxConfig,
+	ak types.AccountKeeper,
+	bk types.BankKeeper,
+	k *keeper.Keeper,
+) simtypes.Operation {
 	return func(
 		r *rand.Rand, app *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, chainID string,
 	) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
@@ -176,7 +183,7 @@ func SimulateMsgCreateValidator(ak types.AccountKeeper, bk types.BankKeeper, k *
 		txCtx := simulation.OperationInput{
 			R:             r,
 			App:           app,
-			TxGen:         moduletestutil.MakeTestEncodingConfig().TxConfig,
+			TxGen:         txGen,
 			Cdc:           nil,
 			Msg:           msg,
 			Context:       ctx,
@@ -190,7 +197,12 @@ func SimulateMsgCreateValidator(ak types.AccountKeeper, bk types.BankKeeper, k *
 }
 
 // SimulateMsgEditValidator generates a MsgEditValidator with random values
-func SimulateMsgEditValidator(ak types.AccountKeeper, bk types.BankKeeper, k *keeper.Keeper) simtypes.Operation {
+func SimulateMsgEditValidator(
+	txGen client.TxConfig,
+	ak types.AccountKeeper,
+	bk types.BankKeeper,
+	k *keeper.Keeper,
+) simtypes.Operation {
 	return func(
 		r *rand.Rand, app *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, chainID string,
 	) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
@@ -234,7 +246,7 @@ func SimulateMsgEditValidator(ak types.AccountKeeper, bk types.BankKeeper, k *ke
 		txCtx := simulation.OperationInput{
 			R:               r,
 			App:             app,
-			TxGen:           moduletestutil.MakeTestEncodingConfig().TxConfig,
+			TxGen:           txGen,
 			Cdc:             nil,
 			Msg:             msg,
 			Context:         ctx,
@@ -250,7 +262,12 @@ func SimulateMsgEditValidator(ak types.AccountKeeper, bk types.BankKeeper, k *ke
 }
 
 // SimulateMsgDelegate generates a MsgDelegate with random values
-func SimulateMsgDelegate(ak types.AccountKeeper, bk types.BankKeeper, k *keeper.Keeper) simtypes.Operation {
+func SimulateMsgDelegate(
+	txGen client.TxConfig,
+	ak types.AccountKeeper,
+	bk types.BankKeeper,
+	k *keeper.Keeper,
+) simtypes.Operation {
 	return func(
 		r *rand.Rand, app *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, chainID string,
 	) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
@@ -301,7 +318,7 @@ func SimulateMsgDelegate(ak types.AccountKeeper, bk types.BankKeeper, k *keeper.
 		txCtx := simulation.OperationInput{
 			R:             r,
 			App:           app,
-			TxGen:         moduletestutil.MakeTestEncodingConfig().TxConfig,
+			TxGen:         txGen,
 			Cdc:           nil,
 			Msg:           msg,
 			Context:       ctx,
@@ -315,7 +332,12 @@ func SimulateMsgDelegate(ak types.AccountKeeper, bk types.BankKeeper, k *keeper.
 }
 
 // SimulateMsgUndelegate generates a MsgUndelegate with random values
-func SimulateMsgUndelegate(ak types.AccountKeeper, bk types.BankKeeper, k *keeper.Keeper) simtypes.Operation {
+func SimulateMsgUndelegate(
+	txGen client.TxConfig,
+	ak types.AccountKeeper,
+	bk types.BankKeeper,
+	k *keeper.Keeper,
+) simtypes.Operation {
 	return func(
 		r *rand.Rand, app *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, chainID string,
 	) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
@@ -378,7 +400,7 @@ func SimulateMsgUndelegate(ak types.AccountKeeper, bk types.BankKeeper, k *keepe
 		txCtx := simulation.OperationInput{
 			R:               r,
 			App:             app,
-			TxGen:           moduletestutil.MakeTestEncodingConfig().TxConfig,
+			TxGen:           txGen,
 			Cdc:             nil,
 			Msg:             msg,
 			Context:         ctx,
@@ -394,7 +416,12 @@ func SimulateMsgUndelegate(ak types.AccountKeeper, bk types.BankKeeper, k *keepe
 }
 
 // SimulateMsgCancelUnbondingDelegate generates a MsgCancelUnbondingDelegate with random values
-func SimulateMsgCancelUnbondingDelegate(ak types.AccountKeeper, bk types.BankKeeper, k *keeper.Keeper) simtypes.Operation {
+func SimulateMsgCancelUnbondingDelegate(
+	txGen client.TxConfig,
+	ak types.AccountKeeper,
+	bk types.BankKeeper,
+	k *keeper.Keeper,
+) simtypes.Operation {
 	return func(
 		r *rand.Rand, app *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, chainID string,
 	) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
@@ -459,7 +486,7 @@ func SimulateMsgCancelUnbondingDelegate(ak types.AccountKeeper, bk types.BankKee
 		txCtx := simulation.OperationInput{
 			R:               r,
 			App:             app,
-			TxGen:           moduletestutil.MakeTestEncodingConfig().TxConfig,
+			TxGen:           txGen,
 			Cdc:             nil,
 			Msg:             msg,
 			Context:         ctx,
@@ -475,7 +502,12 @@ func SimulateMsgCancelUnbondingDelegate(ak types.AccountKeeper, bk types.BankKee
 }
 
 // SimulateMsgBeginRedelegate generates a MsgBeginRedelegate with random values
-func SimulateMsgBeginRedelegate(ak types.AccountKeeper, bk types.BankKeeper, k *keeper.Keeper) simtypes.Operation {
+func SimulateMsgBeginRedelegate(
+	txGen client.TxConfig,
+	ak types.AccountKeeper,
+	bk types.BankKeeper,
+	k *keeper.Keeper,
+) simtypes.Operation {
 	return func(
 		r *rand.Rand, app *baseapp.BaseApp, ctx sdk.Context, accs []simtypes.Account, chainID string,
 	) (simtypes.OperationMsg, []simtypes.FutureOperation, error) {
@@ -562,7 +594,7 @@ func SimulateMsgBeginRedelegate(ak types.AccountKeeper, bk types.BankKeeper, k *
 		txCtx := simulation.OperationInput{
 			R:               r,
 			App:             app,
-			TxGen:           moduletestutil.MakeTestEncodingConfig().TxConfig,
+			TxGen:           txGen,
 			Cdc:             nil,
 			Msg:             msg,
 			Context:         ctx,

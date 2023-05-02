@@ -89,6 +89,21 @@ func (m *MockAccountKeeper) EXPECT() *MockAccountKeeperMockRecorder {
 	return m.recorder
 }
 
+// BytesToString mocks base method.
+func (m *MockAccountKeeper) BytesToString(bz []byte) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BytesToString", bz)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BytesToString indicates an expected call of BytesToString.
+func (mr *MockAccountKeeperMockRecorder) BytesToString(bz interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BytesToString", reflect.TypeOf((*MockAccountKeeper)(nil).BytesToString), bz)
+}
+
 // GetAccount mocks base method.
 func (m *MockAccountKeeper) GetAccount(ctx context.Context, addr types.AccAddress) types.AccountI {
 	m.ctrl.T.Helper()
@@ -221,6 +236,21 @@ func (mr *MockAuthzKeeperMockRecorder) Update(ctx, grantee, granter, updated int
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockAuthzKeeper)(nil).Update), ctx, grantee, granter, updated)
 }
 
+// StringToBytes mocks base method.
+func (m *MockAccountKeeper) StringToBytes(text string) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StringToBytes", text)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StringToBytes indicates an expected call of StringToBytes.
+func (mr *MockAccountKeeperMockRecorder) StringToBytes(text interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StringToBytes", reflect.TypeOf((*MockAccountKeeper)(nil).StringToBytes), text)
+}
+
 // MockBankKeeper is a mock of BankKeeper interface.
 type MockBankKeeper struct {
 	ctrl     *gomock.Controller
@@ -245,7 +275,7 @@ func (m *MockBankKeeper) EXPECT() *MockBankKeeperMockRecorder {
 }
 
 // BurnCoins mocks base method.
-func (m *MockBankKeeper) BurnCoins(ctx types.Context, name string, amt types.Coins) error {
+func (m *MockBankKeeper) BurnCoins(ctx context.Context, name string, amt types.Coins) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BurnCoins", ctx, name, amt)
 	ret0, _ := ret[0].(error)
@@ -259,7 +289,7 @@ func (mr *MockBankKeeperMockRecorder) BurnCoins(ctx, name, amt interface{}) *gom
 }
 
 // DelegateCoinsFromAccountToModule mocks base method.
-func (m *MockBankKeeper) DelegateCoinsFromAccountToModule(ctx types.Context, senderAddr types.AccAddress, recipientModule string, amt types.Coins) error {
+func (m *MockBankKeeper) DelegateCoinsFromAccountToModule(ctx context.Context, senderAddr types.AccAddress, recipientModule string, amt types.Coins) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DelegateCoinsFromAccountToModule", ctx, senderAddr, recipientModule, amt)
 	ret0, _ := ret[0].(error)
@@ -273,7 +303,7 @@ func (mr *MockBankKeeperMockRecorder) DelegateCoinsFromAccountToModule(ctx, send
 }
 
 // GetAllBalances mocks base method.
-func (m *MockBankKeeper) GetAllBalances(ctx types.Context, addr types.AccAddress) types.Coins {
+func (m *MockBankKeeper) GetAllBalances(ctx context.Context, addr types.AccAddress) types.Coins {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAllBalances", ctx, addr)
 	ret0, _ := ret[0].(types.Coins)
@@ -287,7 +317,7 @@ func (mr *MockBankKeeperMockRecorder) GetAllBalances(ctx, addr interface{}) *gom
 }
 
 // GetBalance mocks base method.
-func (m *MockBankKeeper) GetBalance(ctx types.Context, addr types.AccAddress, denom string) types.Coin {
+func (m *MockBankKeeper) GetBalance(ctx context.Context, addr types.AccAddress, denom string) types.Coin {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBalance", ctx, addr, denom)
 	ret0, _ := ret[0].(types.Coin)
@@ -301,7 +331,7 @@ func (mr *MockBankKeeperMockRecorder) GetBalance(ctx, addr, denom interface{}) *
 }
 
 // GetSupply mocks base method.
-func (m *MockBankKeeper) GetSupply(ctx types.Context, denom string) types.Coin {
+func (m *MockBankKeeper) GetSupply(ctx context.Context, denom string) types.Coin {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetSupply", ctx, denom)
 	ret0, _ := ret[0].(types.Coin)
@@ -315,7 +345,7 @@ func (mr *MockBankKeeperMockRecorder) GetSupply(ctx, denom interface{}) *gomock.
 }
 
 // LockedCoins mocks base method.
-func (m *MockBankKeeper) LockedCoins(ctx types.Context, addr types.AccAddress) types.Coins {
+func (m *MockBankKeeper) LockedCoins(ctx context.Context, addr types.AccAddress) types.Coins {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "LockedCoins", ctx, addr)
 	ret0, _ := ret[0].(types.Coins)
@@ -329,7 +359,7 @@ func (mr *MockBankKeeperMockRecorder) LockedCoins(ctx, addr interface{}) *gomock
 }
 
 // SendCoinsFromModuleToModule mocks base method.
-func (m *MockBankKeeper) SendCoinsFromModuleToModule(ctx types.Context, senderPool, recipientPool string, amt types.Coins) error {
+func (m *MockBankKeeper) SendCoinsFromModuleToModule(ctx context.Context, senderPool, recipientPool string, amt types.Coins) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendCoinsFromModuleToModule", ctx, senderPool, recipientPool, amt)
 	ret0, _ := ret[0].(error)
@@ -343,7 +373,7 @@ func (mr *MockBankKeeperMockRecorder) SendCoinsFromModuleToModule(ctx, senderPoo
 }
 
 // SpendableCoins mocks base method.
-func (m *MockBankKeeper) SpendableCoins(ctx types.Context, addr types.AccAddress) types.Coins {
+func (m *MockBankKeeper) SpendableCoins(ctx context.Context, addr types.AccAddress) types.Coins {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SpendableCoins", ctx, addr)
 	ret0, _ := ret[0].(types.Coins)
@@ -357,7 +387,7 @@ func (mr *MockBankKeeperMockRecorder) SpendableCoins(ctx, addr interface{}) *gom
 }
 
 // UndelegateCoinsFromModuleToAccount mocks base method.
-func (m *MockBankKeeper) UndelegateCoinsFromModuleToAccount(ctx types.Context, senderModule string, recipientAddr types.AccAddress, amt types.Coins) error {
+func (m *MockBankKeeper) UndelegateCoinsFromModuleToAccount(ctx context.Context, senderModule string, recipientAddr types.AccAddress, amt types.Coins) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UndelegateCoinsFromModuleToAccount", ctx, senderModule, recipientAddr, amt)
 	ret0, _ := ret[0].(error)

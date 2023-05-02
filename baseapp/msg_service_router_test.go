@@ -1,6 +1,7 @@
 package baseapp_test
 
 import (
+	"context"
 	"testing"
 
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -28,9 +29,13 @@ func TestRegisterMsgService(t *testing.T) {
 		appBuilder *runtime.AppBuilder
 		registry   codectypes.InterfaceRegistry
 	)
-	err := depinject.Inject(makeMinimalConfig(), &appBuilder, &registry)
+	err := depinject.Inject(
+		depinject.Configs(
+			makeMinimalConfig(),
+			depinject.Supply(log.NewTestLogger(t)),
+		), &appBuilder, &registry)
 	require.NoError(t, err)
-	app := appBuilder.Build(log.NewTestLogger(t), dbm.NewMemDB(), nil)
+	app := appBuilder.Build(dbm.NewMemDB(), nil)
 
 	require.Panics(t, func() {
 		testdata.RegisterMsgServer(
@@ -56,10 +61,14 @@ func TestRegisterMsgServiceTwice(t *testing.T) {
 		appBuilder *runtime.AppBuilder
 		registry   codectypes.InterfaceRegistry
 	)
-	err := depinject.Inject(makeMinimalConfig(), &appBuilder, &registry)
+	err := depinject.Inject(
+		depinject.Configs(
+			makeMinimalConfig(),
+			depinject.Supply(log.NewTestLogger(t)),
+		), &appBuilder, &registry)
 	require.NoError(t, err)
 	db := dbm.NewMemDB()
-	app := appBuilder.Build(log.NewTestLogger(t), db, nil)
+	app := appBuilder.Build(db, nil)
 	testdata.RegisterInterfaces(registry)
 
 	// First time registering service shouldn't panic.
@@ -87,14 +96,21 @@ func TestMsgService(t *testing.T) {
 		cdc               codec.ProtoCodecMarshaler
 		interfaceRegistry codectypes.InterfaceRegistry
 	)
-	err := depinject.Inject(makeMinimalConfig(), &appBuilder, &cdc, &interfaceRegistry)
+	err := depinject.Inject(
+		depinject.Configs(
+			makeMinimalConfig(),
+			depinject.Supply(log.NewNopLogger()),
+		), &appBuilder, &cdc, &interfaceRegistry)
 	require.NoError(t, err)
-	app := appBuilder.Build(log.NewNopLogger(), dbm.NewMemDB(), nil, baseapp.SetChainID(sdktestutil.DefaultChainId))
+	app := appBuilder.Build(dbm.NewMemDB(), nil, baseapp.SetChainID(sdktestutil.DefaultChainId))
 
 	// patch in TxConfig instead of using an output from x/auth/tx
 	txConfig := authtx.NewTxConfig(cdc, authtx.DefaultSignModes)
 	// set the TxDecoder in the BaseApp for minimal tx simulations
 	app.SetTxDecoder(txConfig.TxDecoder())
+
+	defaultSignMode, err := authsigning.APISignModeToInternal(txConfig.SignModeHandler().DefaultMode())
+	require.NoError(t, err)
 
 	testdata.RegisterInterfaces(interfaceRegistry)
 	testdata.RegisterMsgServer(
@@ -116,7 +132,7 @@ func TestMsgService(t *testing.T) {
 	sigV2 := signing.SignatureV2{
 		PubKey: priv.PubKey(),
 		Data: &signing.SingleSignatureData{
-			SignMode:  txConfig.SignModeHandler().DefaultMode(),
+			SignMode:  defaultSignMode,
 			Signature: nil,
 		},
 		Sequence: 0,
@@ -130,9 +146,10 @@ func TestMsgService(t *testing.T) {
 		ChainID:       sdktestutil.DefaultChainId,
 		AccountNumber: 0,
 		Sequence:      0,
+		PubKey:        priv.PubKey(),
 	}
 	sigV2, err = tx.SignWithPrivKey(
-		nil, txConfig.SignModeHandler().DefaultMode(), signerData, //nolint:staticcheck // SA1019: txConfig.SignModeHandler().DefaultMode() is deprecated: use txConfig.SignModeHandler().DefaultMode() instead.
+		context.TODO(), defaultSignMode, signerData,
 		txBuilder, priv, txConfig, 0)
 	require.NoError(t, err)
 	err = txBuilder.SetSignatures(sigV2)

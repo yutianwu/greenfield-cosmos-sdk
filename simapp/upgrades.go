@@ -8,6 +8,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 )
 
+// todo: check this with dylan
+
 func (app *SimApp) RegisterUpgradeHandlers(chainID string, serverCfg *serverconfig.Config) error {
 
 	// Register the plans from server config

@@ -5,14 +5,51 @@
 package types
 
 import (
+	context "context"
 	big "math/big"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
-
 	types "github.com/cosmos/cosmos-sdk/types"
 	types0 "github.com/cosmos/cosmos-sdk/x/staking/types"
+	gomock "github.com/golang/mock/gomock"
 )
+
+// MockBankKeeper is a mock of BankKeeper interface
+type MockBankKeeper struct {
+	ctrl     *gomock.Controller
+	recorder *MockBankKeeperMockRecorder
+}
+
+// MockBankKeeperMockRecorder is the mock recorder for MockBankKeeper
+type MockBankKeeperMockRecorder struct {
+	mock *MockBankKeeper
+}
+
+// NewMockBankKeeper creates a new mock instance
+func NewMockBankKeeper(ctrl *gomock.Controller) *MockBankKeeper {
+	mock := &MockBankKeeper{ctrl: ctrl}
+	mock.recorder = &MockBankKeeperMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use
+func (m *MockBankKeeper) EXPECT() *MockBankKeeperMockRecorder {
+	return m.recorder
+}
+
+// SendCoinsFromModuleToAccount mocks base method
+func (m *MockBankKeeper) SendCoinsFromModuleToAccount(arg0 context.Context, arg1 string, arg2 types.AccAddress, arg3 types.Coins) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendCoinsFromModuleToAccount", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SendCoinsFromModuleToAccount indicates an expected call of SendCoinsFromModuleToAccount
+func (mr *MockBankKeeperMockRecorder) SendCoinsFromModuleToAccount(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendCoinsFromModuleToAccount", reflect.TypeOf((*MockBankKeeper)(nil).SendCoinsFromModuleToAccount), arg0, arg1, arg2, arg3)
+}
 
 // MockStakingKeeper is a mock of StakingKeeper interface
 type MockStakingKeeper struct {
@@ -184,41 +221,4 @@ func (m *MockCrossChainKeeper) IsDestChainSupported(arg0 types.ChainID) bool {
 func (mr *MockCrossChainKeeperMockRecorder) IsDestChainSupported(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsDestChainSupported", reflect.TypeOf((*MockCrossChainKeeper)(nil).IsDestChainSupported), arg0)
-}
-
-// MockBankKeeper is a mock of BankKeeper interface
-type MockBankKeeper struct {
-	ctrl     *gomock.Controller
-	recorder *MockBankKeeperMockRecorder
-}
-
-// MockBankKeeperMockRecorder is the mock recorder for MockBankKeeper
-type MockBankKeeperMockRecorder struct {
-	mock *MockBankKeeper
-}
-
-// NewMockBankKeeper creates a new mock instance
-func NewMockBankKeeper(ctrl *gomock.Controller) *MockBankKeeper {
-	mock := &MockBankKeeper{ctrl: ctrl}
-	mock.recorder = &MockBankKeeperMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use
-func (m *MockBankKeeper) EXPECT() *MockBankKeeperMockRecorder {
-	return m.recorder
-}
-
-// SendCoinsFromModuleToAccount mocks base method
-func (m *MockBankKeeper) SendCoinsFromModuleToAccount(arg0 types.Context, arg1 string, arg2 types.AccAddress, arg3 types.Coins) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendCoinsFromModuleToAccount", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SendCoinsFromModuleToAccount indicates an expected call of SendCoinsFromModuleToAccount
-func (mr *MockBankKeeperMockRecorder) SendCoinsFromModuleToAccount(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendCoinsFromModuleToAccount", reflect.TypeOf((*MockBankKeeper)(nil).SendCoinsFromModuleToAccount), arg0, arg1, arg2, arg3)
 }

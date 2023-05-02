@@ -18,10 +18,10 @@ type AccountKeeper interface {
 
 // BankKeeper defines the expected interface needed to retrieve account balances.
 type BankKeeper interface {
-	GetAllBalances(ctx sdk.Context, addr sdk.AccAddress) sdk.Coins
-	GetBalance(ctx sdk.Context, addr sdk.AccAddress, denom string) sdk.Coin
-	LockedCoins(ctx sdk.Context, addr sdk.AccAddress) sdk.Coins
-	SpendableCoins(ctx sdk.Context, addr sdk.AccAddress) sdk.Coins
+	GetAllBalances(ctx context.Context, addr sdk.AccAddress) sdk.Coins
+	GetBalance(ctx context.Context, addr sdk.AccAddress, denom string) sdk.Coin
+	LockedCoins(ctx context.Context, addr sdk.AccAddress) sdk.Coins
+	SpendableCoins(ctx context.Context, addr sdk.AccAddress) sdk.Coins
 }
 
 // ParamSubspace defines the expected Subspace interfacace
@@ -44,7 +44,7 @@ type StakingKeeper interface {
 
 	// slash the validator and delegators of the validator, specifying offense height, offense power, and slash fraction
 	Slash(sdk.Context, sdk.ConsAddress, int64, int64, sdk.Dec) math.Int
-	SlashWithInfractionReason(sdk.Context, sdk.ConsAddress, int64, int64, sdk.Dec, stakingtypes.Infraction) math.Int
+	SlashWithInfractionReason(sdk.Context, sdk.ConsAddress, int64, int64, math.LegacyDec, stakingtypes.Infraction) math.Int
 	Jail(sdk.Context, sdk.ConsAddress)   // jail a validator
 	Unjail(sdk.Context, sdk.ConsAddress) // unjail a validator
 
@@ -73,5 +73,5 @@ type StakingHooks interface {
 	BeforeDelegationSharesModified(ctx sdk.Context, delAddr, valAddr sdk.AccAddress) error // Must be called when a delegation's shares are modified
 	BeforeDelegationRemoved(ctx sdk.Context, delAddr, valAddr sdk.AccAddress) error        // Must be called when a delegation is removed
 	AfterDelegationModified(ctx sdk.Context, delAddr, valAddr sdk.AccAddress) error
-	BeforeValidatorSlashed(ctx sdk.Context, valAddr sdk.AccAddress, fraction sdk.Dec) error
+	BeforeValidatorSlashed(ctx sdk.Context, valAddr sdk.AccAddress, fraction math.LegacyDec) error
 }

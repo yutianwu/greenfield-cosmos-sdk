@@ -15,6 +15,7 @@ type Config struct {
 
 type ChainConfig struct {
 	GRPCEndpoints []GRPCEndpoint `toml:"trusted-grpc-endpoints"`
+	Bech32Prefix  string         `toml:"bech32-prefix"`
 }
 
 type GRPCEndpoint struct {
@@ -54,7 +55,7 @@ func SaveConfig(configDir string, config *Config) error {
 	}
 
 	configPath := configFilename(configDir)
-	if err := os.WriteFile(configPath, buf.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(configPath, buf.Bytes(), 0o600); err != nil {
 		return err
 	}
 

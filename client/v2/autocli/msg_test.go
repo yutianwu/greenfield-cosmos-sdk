@@ -5,19 +5,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/protojson"
-
+	"gotest.tools/v3/assert"
 	"gotest.tools/v3/golden"
 
 	autocliv1 "cosmossdk.io/api/cosmos/autocli/v1"
-	"github.com/spf13/cobra"
-	"gotest.tools/v3/assert"
-
 	"cosmossdk.io/client/v2/internal/testpb"
 )
 
 var buildModuleMsgCommand = func(moduleName string, b *Builder) (*cobra.Command, error) {
-	cmd := topLevelCmd(moduleName, fmt.Sprintf("Transations commands for the %s module", moduleName))
+	cmd := topLevelCmd(moduleName, fmt.Sprintf("Transactions commands for the %s module", moduleName))
 
 	err := b.AddMsgServiceCommands(cmd, testCmdMsgDesc)
 	return cmd, err
@@ -102,7 +100,7 @@ var testCmdMsgDesc = &autocliv1.ServiceCommandDescriptor{
 func TestMsgOptions(t *testing.T) {
 	conn := testExecCommon(t,
 		buildModuleMsgCommand,
-		"send", "5", "6", `{"denom":"foo","amount":"1"}`,
+		"send", "5", "6", "1foo",
 		"--uint32", "7",
 		"--u64", "8",
 		"--output", "json",
@@ -118,12 +116,12 @@ func TestMsgOptions(t *testing.T) {
 
 func TestMsgOutputFormat(t *testing.T) {
 	conn := testExecCommon(t, buildModuleMsgCommand,
-		"send", "5", "6", `{"denom":"foo","amount":"1"}`,
+		"send", "5", "6", "1foo",
 		"--output", "json",
 	)
 	assert.Assert(t, strings.Contains(conn.out.String(), "{"))
 	conn = testExecCommon(t, buildModuleMsgCommand,
-		"send", "5", "6", `{"denom":"foo","amount":"1"}`,
+		"send", "5", "6", "1foo",
 		"--output", "text",
 	)
 
@@ -164,8 +162,8 @@ func TestEverythingMsg(t *testing.T) {
 		"send",
 		"1",
 		"abc",
-		`{"denom":"foo","amount":"1234"}`,
-		`{"denom":"bar","amount":"4321"}`,
+		"1234foo",
+		"4321foo",
 		"--output", "json",
 		"--a-bool",
 		"--an-enum", "two",
@@ -177,7 +175,7 @@ func TestEverythingMsg(t *testing.T) {
 		"--i64", "-234602347",
 		"--str", "def",
 		"--timestamp", "2019-01-02T00:01:02Z",
-		"--a-coin", `{"denom":"foo","amount":"100000"}`,
+		"--a-coin", "10000000foo",
 		"--an-address", "cosmos1y74p8wyy4enfhfn342njve6cjmj5c8dtl6emdk",
 		"--bz", "c2RncXdlZndkZ3NkZw==",
 		"--page-count-total",
@@ -225,18 +223,22 @@ func TestHelpMsg(t *testing.T) {
 	golden.Assert(t, conn.out.String(), "help-deprecated-msg.golden")
 }
 
-func TestBuildCustomMsgCommand(t *testing.T) {
+func TestBuildMsgCommand(t *testing.T) {
 	b := &Builder{}
 	customCommandCalled := false
-	cmd, err := b.BuildMsgCommand(map[string]*autocliv1.ModuleOptions{
-		"test": {
-			Tx: testCmdMsgDesc,
+	appOptions := AppOptions{
+		ModuleOptions: map[string]*autocliv1.ModuleOptions{
+			"test": {
+				Tx: testCmdMsgDesc,
+			},
 		},
-	}, map[string]*cobra.Command{
+	}
+
+	cmd, err := b.BuildMsgCommand(appOptions, map[string]*cobra.Command{
 		"test": {Use: "test", Run: func(cmd *cobra.Command, args []string) {
 			customCommandCalled = true
 		}},
-	})
+	}, enhanceMsg)
 	assert.NilError(t, err)
 	cmd.SetArgs([]string{"test", "tx"})
 	assert.NilError(t, cmd.Execute())
@@ -260,28 +262,27 @@ func TestErrorBuildMsgCommand(t *testing.T) {
 		},
 	}
 
-	opts := map[string]*autocliv1.ModuleOptions{
-		"test": {
-			Tx: commandDescriptor,
+	appOptions := AppOptions{
+		ModuleOptions: map[string]*autocliv1.ModuleOptions{
+			"test": {
+				Tx: commandDescriptor,
+			},
 		},
 	}
-	_, err := b.BuildMsgCommand(opts, nil)
+
+	_, err := b.BuildMsgCommand(appOptions, nil, enhanceMsg)
 	assert.ErrorContains(t, err, "can't find field un-existent-proto-field")
 
 	nonExistentService := &autocliv1.ServiceCommandDescriptor{Service: "un-existent-service"}
-	opts = map[string]*autocliv1.ModuleOptions{
-		"test": {
-			Tx: nonExistentService,
-		},
-	}
-	_, err = b.BuildMsgCommand(opts, nil)
+	appOptions.ModuleOptions["test"].Tx = nonExistentService
+	_, err = b.BuildMsgCommand(appOptions, nil, enhanceMsg)
 	assert.ErrorContains(t, err, "can't find service un-existent-service")
 }
 
 func TestNotFoundErrorsMsg(t *testing.T) {
 	b := &Builder{}
 	buildModuleMsgCommand := func(moduleName string, cmdDescriptor *autocliv1.ServiceCommandDescriptor) (*cobra.Command, error) {
-		cmd := topLevelCmd(moduleName, fmt.Sprintf("Transations commands for the %s module", moduleName))
+		cmd := topLevelCmd(moduleName, fmt.Sprintf("Transactions commands for the %s module", moduleName))
 
 		err := b.AddMsgServiceCommands(cmd, cmdDescriptor)
 		return cmd, err
@@ -328,46 +329,35 @@ func TestNotFoundErrorsMsg(t *testing.T) {
 
 func TestEnhanceMessageCommand(t *testing.T) {
 	b := &Builder{}
-	enhanceMsg := func(cmd *cobra.Command, modOpts *autocliv1.ModuleOptions, moduleName string) error {
-		txCmdDesc := modOpts.Tx
-		if txCmdDesc != nil {
-			subCmd := topLevelCmd(moduleName, fmt.Sprintf("Transations commands for the %s module", moduleName))
-			err := b.AddMsgServiceCommands(cmd, txCmdDesc)
-			if err != nil {
-				return err
-			}
-
-			cmd.AddCommand(subCmd)
-		}
-		return nil
-	}
-
 	// Test that the command has a subcommand
 	cmd := &cobra.Command{Use: "test"}
 	cmd.AddCommand(&cobra.Command{Use: "test"})
-	options := map[string]*autocliv1.ModuleOptions{
-		"test": {},
+
+	appOptions := AppOptions{
+		ModuleOptions: map[string]*autocliv1.ModuleOptions{
+			"test": {},
+		},
 	}
-	err := b.enhanceCommandCommon(cmd, options, map[string]*cobra.Command{}, enhanceMsg)
+
+	err := b.enhanceCommandCommon(cmd, appOptions, map[string]*cobra.Command{}, enhanceMsg)
 	assert.NilError(t, err)
 
 	cmd = &cobra.Command{Use: "test"}
-	options = map[string]*autocliv1.ModuleOptions{}
+
+	appOptions.ModuleOptions = map[string]*autocliv1.ModuleOptions{}
 	customCommands := map[string]*cobra.Command{
 		"test2": {Use: "test"},
 	}
-	err = b.enhanceCommandCommon(cmd, options, customCommands, enhanceMsg)
+	err = b.enhanceCommandCommon(cmd, appOptions, customCommands, enhanceMsg)
 	assert.NilError(t, err)
 
 	cmd = &cobra.Command{Use: "test"}
-	options = map[string]*autocliv1.ModuleOptions{
-		"test": {Tx: nil},
+	appOptions = AppOptions{
+		ModuleOptions: map[string]*autocliv1.ModuleOptions{
+			"test": {Tx: nil},
+		},
 	}
 	customCommands = map[string]*cobra.Command{}
-	err = b.enhanceCommandCommon(cmd, options, customCommands, enhanceMsg)
+	err = b.enhanceCommandCommon(cmd, appOptions, customCommands, enhanceMsg)
 	assert.NilError(t, err)
-}
-
-type testMessageServer struct {
-	testpb.UnimplementedMsgServer
 }

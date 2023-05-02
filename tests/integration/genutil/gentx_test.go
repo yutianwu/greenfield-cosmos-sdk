@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"cosmossdk.io/depinject"
+	"cosmossdk.io/log"
 	"cosmossdk.io/math"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/prysmaticlabs/prysm/crypto/bls"
@@ -35,6 +37,7 @@ import (
 	_ "github.com/cosmos/cosmos-sdk/x/staking"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -64,14 +67,18 @@ func initFixture(t assert.TestingT) *fixture {
 	encCfg := moduletestutil.TestEncodingConfig{}
 
 	app, err := simtestutil.SetupWithConfiguration(
-		configurator.NewAppConfig(
-			configurator.BankModule(),
-			configurator.TxModule(),
-			configurator.StakingModule(),
-			configurator.ParamsModule(),
-			configurator.ConsensusModule(),
-			configurator.AuthzModule(),
-			configurator.AuthModule()),
+		depinject.Configs(
+			configurator.NewAppConfig(
+				configurator.BankModule(),
+				configurator.TxModule(),
+				configurator.StakingModule(),
+				configurator.ParamsModule(),
+				configurator.ConsensusModule(),
+				configurator.AuthzModule(),
+				configurator.AuthModule(),
+			),
+			depinject.Supply(log.NewNopLogger()),
+		),
 		simtestutil.DefaultStartUpConfig(),
 		&encCfg.InterfaceRegistry, &encCfg.Codec, &encCfg.TxConfig, &encCfg.Amino,
 		&f.accountKeeper, &f.bankKeeper, &f.stakingKeeper)
@@ -105,7 +112,7 @@ func setAccountBalance(t *testing.T, f *fixture, addr sdk.AccAddress, amount int
 	acc := f.accountKeeper.NewAccountWithAddress(f.ctx, addr)
 	f.accountKeeper.SetAccount(f.ctx, acc)
 
-	err := testutil.FundAccount(f.bankKeeper, f.ctx, addr, sdk.Coins{sdk.NewInt64Coin(sdk.DefaultBondDenom, amount)})
+	err := testutil.FundAccount(f.ctx, f.bankKeeper, addr, sdk.Coins{sdk.NewInt64Coin(sdk.DefaultBondDenom, amount)})
 	assert.NilError(t, err)
 
 	bankGenesisState := f.bankKeeper.ExportGenesis(f.ctx)
@@ -309,7 +316,7 @@ func TestDeliverGenTxs(t *testing.T) {
 			tc.malleate()
 
 			if tc.expPass {
-				sdktestutil.AssertNotPanics(t, func() {
+				require.NotPanics(t, func() {
 					genutil.DeliverGenTxs(
 						f.ctx, genTxs, f.stakingKeeper, f.baseApp.DeliverTx,
 						f.encodingConfig.TxConfig,

@@ -9,6 +9,7 @@ import (
 	gwruntime "github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
 
+	"cosmossdk.io/core/address"
 	"cosmossdk.io/depinject"
 
 	"cosmossdk.io/core/appmodule"
@@ -32,7 +33,7 @@ import (
 )
 
 // ConsensusVersion defines the current x/auth module consensus version.
-const ConsensusVersion = 4
+const ConsensusVersion = 5
 
 var (
 	_ module.AppModule           = AppModule{}
@@ -41,7 +42,9 @@ var (
 )
 
 // AppModuleBasic defines the basic application module used by the auth module.
-type AppModuleBasic struct{}
+type AppModuleBasic struct {
+	ac address.Codec
+}
 
 // Name returns the auth module's name.
 func (AppModuleBasic) Name() string {
@@ -82,8 +85,8 @@ func (AppModuleBasic) GetTxCmd() *cobra.Command {
 }
 
 // GetQueryCmd returns the root query command for the auth module.
-func (AppModuleBasic) GetQueryCmd() *cobra.Command {
-	return cli.GetQueryCmd()
+func (ab AppModuleBasic) GetQueryCmd() *cobra.Command {
+	return cli.GetQueryCmd(ab.ac)
 }
 
 // RegisterInterfaces registers interfaces and implementations of the auth module.
@@ -144,9 +147,8 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 		panic(fmt.Sprintf("failed to migrate x/%s from version 3 to 4: %v", types.ModuleName, err))
 	}
 
-	// see migrations/v5/doc.go
-	if err := cfg.RegisterMigration(types.ModuleName, 4, func(ctx sdk.Context) error { return nil }); err != nil {
-		panic(fmt.Sprintf("failed to migrate x/%s from version 4 to 5: %v", types.ModuleName, err))
+	if err := cfg.RegisterMigration(types.ModuleName, 4, m.Migrate4To5); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/%s from version 4 to 5", types.ModuleName))
 	}
 }
 
@@ -201,8 +203,13 @@ func init() {
 	)
 }
 
-//nolint:revive
-type AuthInputs struct {
+// ProvideAddressCodec provides an address.Codec to the container for any
+// modules that want to do address string <> bytes conversion.
+func ProvideAddressCodec(config *modulev1.Module) address.Codec {
+	return keeper.NewBech32Codec(config.Bech32Prefix)
+}
+
+type ModuleInputs struct {
 	depinject.In
 
 	Config       *modulev1.Module
@@ -216,15 +223,14 @@ type AuthInputs struct {
 	LegacySubspace exported.Subspace `optional:"true"`
 }
 
-//nolint:revive
-type AuthOutputs struct {
+type ModuleOutputs struct {
 	depinject.Out
 
 	AccountKeeper keeper.AccountKeeper
 	Module        appmodule.AppModule
 }
 
-func ProvideModule(in AuthInputs) AuthOutputs {
+func ProvideModule(in ModuleInputs) ModuleOutputs {
 	maccPerms := map[string][]string{}
 	for _, permission := range in.Config.ModuleAccountPermissions {
 		maccPerms[permission.Account] = permission.Permissions
@@ -247,5 +253,5 @@ func ProvideModule(in AuthInputs) AuthOutputs {
 	k := keeper.NewAccountKeeper(in.Cdc, in.StoreService, in.AccountI, maccPerms, authority.String())
 	m := NewAppModule(in.Cdc, k, in.RandomGenesisAccountsFn, in.LegacySubspace)
 
-	return AuthOutputs{AccountKeeper: k, Module: m}
+	return ModuleOutputs{AccountKeeper: k, Module: m}
 }

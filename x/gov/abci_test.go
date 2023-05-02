@@ -20,7 +20,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/gov/keeper"
 	"github.com/cosmos/cosmos-sdk/x/gov/types"
 	v1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
-	"github.com/cosmos/cosmos-sdk/x/staking"
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
@@ -364,7 +363,7 @@ func TestProposalPassedEndblocker(t *testing.T) {
 			proposer := addrs[0]
 
 			createValidators(t, stakingMsgSvr, ctx, []sdk.AccAddress{valAddr}, []int64{10})
-			staking.EndBlocker(ctx, suite.StakingKeeper)
+			suite.StakingKeeper.EndBlocker(ctx)
 
 			macc := suite.GovKeeper.GetGovernanceAccount(ctx)
 			require.NotNil(t, macc)
@@ -419,7 +418,7 @@ func TestEndBlockerProposalHandlerFailed(t *testing.T) {
 	proposer := addrs[0]
 
 	createValidators(t, stakingMsgSvr, ctx, []sdk.AccAddress{valAddr}, []int64{10})
-	staking.EndBlocker(ctx, suite.StakingKeeper)
+	suite.StakingKeeper.EndBlocker(ctx)
 
 	msg := banktypes.NewMsgSend(authtypes.NewModuleAddress(types.ModuleName), addrs[0], sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, sdk.NewInt(100000))))
 	proposal, err := suite.GovKeeper.SubmitProposal(ctx, []sdk.Msg{msg}, "", "title", "summary", proposer, false)
@@ -500,7 +499,7 @@ func TestExpeditedProposal_PassAndConversionToRegular(t *testing.T) {
 
 			// Create a validator so that able to vote on proposal.
 			createValidators(t, stakingMsgSvr, ctx, []sdk.AccAddress{valAddr}, []int64{10})
-			staking.EndBlocker(ctx, suite.StakingKeeper)
+			suite.StakingKeeper.EndBlocker(ctx)
 
 			inactiveQueue := suite.GovKeeper.InactiveProposalQueueIterator(ctx, ctx.BlockHeader().Time)
 			require.False(t, inactiveQueue.Valid())

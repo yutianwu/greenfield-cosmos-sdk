@@ -289,7 +289,7 @@ func (k Keeper) GroupsByMember(goCtx context.Context, request *group.QueryGroups
 		return nil, err
 	}
 
-	iter, err := k.groupMemberByMemberIndex.GetPaginated(ctx.KVStore(k.key), member.Bytes(), request.Pagination)
+	iter, err := k.groupMemberByMemberIndex.GetPaginated(ctx.KVStore(k.key), member, request.Pagination)
 	if err != nil {
 		return nil, err
 	}

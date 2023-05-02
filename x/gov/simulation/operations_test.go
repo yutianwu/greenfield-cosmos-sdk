@@ -6,12 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"cosmossdk.io/depinject"
+	"cosmossdk.io/log"
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/stretchr/testify/require"
 
-	crosschainkeeper "github.com/cosmos/cosmos-sdk/x/crosschain/keeper"
-
+	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/runtime"
 	sdktestutil "github.com/cosmos/cosmos-sdk/testutil"
 	"github.com/cosmos/cosmos-sdk/testutil/configurator"
@@ -28,6 +29,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/bank/testutil"
 	_ "github.com/cosmos/cosmos-sdk/x/consensus"
 	_ "github.com/cosmos/cosmos-sdk/x/crosschain"
+	crosschainkeeper "github.com/cosmos/cosmos-sdk/x/crosschain/keeper"
 	_ "github.com/cosmos/cosmos-sdk/x/distribution"
 	dk "github.com/cosmos/cosmos-sdk/x/distribution/keeper"
 	govcodec "github.com/cosmos/cosmos-sdk/x/gov/codec"
@@ -43,7 +45,7 @@ import (
 
 var (
 	_ simtypes.WeightedProposalMsg     = MockWeightedProposals{}
-	_ simtypes.WeightedProposalContent = MockWeightedProposals{} //nolint:staticcheck
+	_ simtypes.WeightedProposalContent = MockWeightedProposals{} //nolint:staticcheck // testing legacy code path
 )
 
 type MockWeightedProposals struct {
@@ -64,8 +66,8 @@ func (m MockWeightedProposals) MsgSimulatorFn() simtypes.MsgSimulatorFn {
 	}
 }
 
-func (m MockWeightedProposals) ContentSimulatorFn() simtypes.ContentSimulatorFn { //nolint:staticcheck
-	return func(r *rand.Rand, _ sdk.Context, _ []simtypes.Account) simtypes.Content { //nolint:staticcheck
+func (m MockWeightedProposals) ContentSimulatorFn() simtypes.ContentSimulatorFn { //nolint:staticcheck // testing legacy code path
+	return func(r *rand.Rand, _ sdk.Context, _ []simtypes.Account) simtypes.Content { //nolint:staticcheck // testing legacy code path
 		return v1beta1.NewTextProposal(
 			fmt.Sprintf("title-%d: %s", m.n, simtypes.RandStringOfLength(r, 100)),
 			fmt.Sprintf("description-%d: %s", m.n, simtypes.RandStringOfLength(r, 4000)),
@@ -81,8 +83,8 @@ func mockWeightedProposalMsg(n int) []simtypes.WeightedProposalMsg {
 	return wpc
 }
 
-func mockWeightedLegacyProposalContent(n int) []simtypes.WeightedProposalContent { //nolint:staticcheck
-	wpc := make([]simtypes.WeightedProposalContent, n) //nolint:staticcheck
+func mockWeightedLegacyProposalContent(n int) []simtypes.WeightedProposalContent { //nolint:staticcheck // testing legacy code path
+	wpc := make([]simtypes.WeightedProposalContent, n) //nolint:staticcheck // testing legacy code path
 	for i := 0; i < n; i++ {
 		wpc[i] = MockWeightedProposals{i}
 	}
@@ -96,7 +98,7 @@ func TestWeightedOperations(t *testing.T) {
 	ctx = ctx.WithChainID(sdktestutil.DefaultChainId)
 	appParams := make(simtypes.AppParams)
 
-	weightesOps := simulation.WeightedOperations(appParams, govcodec.ModuleCdc, suite.AccountKeeper,
+	weightesOps := simulation.WeightedOperations(appParams, govcodec.ModuleCdc, suite.TxConfig, suite.AccountKeeper,
 		suite.BankKeeper, suite.GovKeeper, mockWeightedProposalMsg(3), mockWeightedLegacyProposalContent(1),
 	)
 
@@ -149,7 +151,7 @@ func TestSimulateMsgSubmitProposal(t *testing.T) {
 	app.BeginBlock(abci.RequestBeginBlock{Header: cmtproto.Header{ChainID: sdktestutil.DefaultChainId, Height: app.LastBlockHeight() + 1, AppHash: app.LastCommitID().Hash}})
 
 	// execute operation
-	op := simulation.SimulateMsgSubmitProposal(suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper, MockWeightedProposals{3}.MsgSimulatorFn())
+	op := simulation.SimulateMsgSubmitProposal(suite.TxConfig, suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper, MockWeightedProposals{3}.MsgSimulatorFn())
 	operationMsg, _, err := op(r, app.BaseApp, ctx, accounts, sdktestutil.DefaultChainId)
 	require.NoError(t, err)
 
@@ -179,7 +181,7 @@ func TestSimulateMsgSubmitLegacyProposal(t *testing.T) {
 	app.BeginBlock(abci.RequestBeginBlock{Header: cmtproto.Header{ChainID: sdktestutil.DefaultChainId, Height: app.LastBlockHeight() + 1, AppHash: app.LastCommitID().Hash}})
 
 	// execute operation
-	op := simulation.SimulateMsgSubmitLegacyProposal(suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper, MockWeightedProposals{3}.ContentSimulatorFn())
+	op := simulation.SimulateMsgSubmitLegacyProposal(suite.TxConfig, suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper, MockWeightedProposals{3}.ContentSimulatorFn())
 	operationMsg, _, err := op(r, app.BaseApp, ctx, accounts, sdktestutil.DefaultChainId)
 	require.NoError(t, err)
 
@@ -226,7 +228,7 @@ func TestSimulateMsgCancelProposal(t *testing.T) {
 	app.BeginBlock(abci.RequestBeginBlock{Header: cmtproto.Header{ChainID: sdktestutil.DefaultChainId, Height: app.LastBlockHeight() + 1, AppHash: app.LastCommitID().Hash, Time: blockTime}})
 
 	// execute operation
-	op := simulation.SimulateMsgCancelProposal(suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper)
+	op := simulation.SimulateMsgCancelProposal(suite.TxConfig, suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper)
 	operationMsg, _, err := op(r, app.BaseApp, ctx, accounts, sdktestutil.DefaultChainId)
 	require.NoError(t, err)
 
@@ -270,7 +272,7 @@ func TestSimulateMsgDeposit(t *testing.T) {
 	app.BeginBlock(abci.RequestBeginBlock{Header: cmtproto.Header{ChainID: sdktestutil.DefaultChainId, Height: app.LastBlockHeight() + 1, AppHash: app.LastCommitID().Hash, Time: blockTime}})
 
 	// execute operation
-	op := simulation.SimulateMsgDeposit(suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper)
+	op := simulation.SimulateMsgDeposit(suite.TxConfig, suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper)
 	operationMsg, _, err := op(r, app.BaseApp, ctx, accounts, sdktestutil.DefaultChainId)
 	require.NoError(t, err)
 
@@ -316,7 +318,7 @@ func TestSimulateMsgVote(t *testing.T) {
 	app.BeginBlock(abci.RequestBeginBlock{Header: cmtproto.Header{ChainID: sdktestutil.DefaultChainId, Height: app.LastBlockHeight() + 1, AppHash: app.LastCommitID().Hash, Time: blockTime}})
 
 	// execute operation
-	op := simulation.SimulateMsgVote(suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper)
+	op := simulation.SimulateMsgVote(suite.TxConfig, suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper)
 	operationMsg, _, err := op(r, app.BaseApp, ctx, accounts, sdktestutil.DefaultChainId)
 	require.NoError(t, err)
 
@@ -359,7 +361,7 @@ func TestSimulateMsgVoteWeighted(t *testing.T) {
 	app.BeginBlock(abci.RequestBeginBlock{Header: cmtproto.Header{ChainID: sdktestutil.DefaultChainId, Height: app.LastBlockHeight() + 1, AppHash: app.LastCommitID().Hash, Time: blockTime}})
 
 	// execute operation
-	op := simulation.SimulateMsgVoteWeighted(suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper)
+	op := simulation.SimulateMsgVoteWeighted(suite.TxConfig, suite.AccountKeeper, suite.BankKeeper, suite.GovKeeper)
 	operationMsg, _, err := op(r, app.BaseApp, ctx, accounts, sdktestutil.DefaultChainId)
 	require.NoError(t, err)
 
@@ -374,6 +376,7 @@ func TestSimulateMsgVoteWeighted(t *testing.T) {
 }
 
 type suite struct {
+	TxConfig           client.TxConfig
 	AccountKeeper      authkeeper.AccountKeeper
 	AuthzKeeper        authzkeeper.Keeper
 	BankKeeper         bankkeeper.Keeper
@@ -388,18 +391,23 @@ type suite struct {
 func createTestSuite(t *testing.T, isCheckTx bool) (suite, sdk.Context) {
 	res := suite{}
 
-	app, err := simtestutil.Setup(configurator.NewAppConfig(
-		configurator.AuthModule(),
-		configurator.AuthzModule(),
-		configurator.TxModule(),
-		configurator.ParamsModule(),
-		configurator.BankModule(),
-		configurator.StakingModule(),
-		configurator.ConsensusModule(),
-		configurator.DistributionModule(),
-		configurator.GovModule(),
-		configurator.CrossChainModule(),
-	), &res.AccountKeeper, &res.AuthzKeeper, &res.BankKeeper, &res.GovKeeper, &res.StakingKeeper, &res.DistributionKeeper, &res.CrossChainKeeper)
+	app, err := simtestutil.Setup(
+		depinject.Configs(
+			configurator.NewAppConfig(
+				configurator.AuthModule(),
+				configurator.AuthzModule(),
+				configurator.TxModule(),
+				configurator.ParamsModule(),
+				configurator.BankModule(),
+				configurator.StakingModule(),
+				configurator.ConsensusModule(),
+				configurator.DistributionModule(),
+				configurator.GovModule(),
+				configurator.CrossChainModule(),
+			),
+			depinject.Supply(log.NewNopLogger()),
+		),
+		&res.TxConfig, &res.AccountKeeper, &res.AuthzKeeper, &res.BankKeeper, &res.GovKeeper, &res.StakingKeeper, &res.DistributionKeeper, &res.CrossChainKeeper)
 	require.NoError(t, err)
 
 	ctx := app.BaseApp.NewContext(isCheckTx, cmtproto.Header{ChainID: sdktestutil.DefaultChainId})
@@ -422,7 +430,7 @@ func getTestingAccounts(
 	for _, account := range accounts {
 		acc := accountKeeper.NewAccountWithAddress(ctx, account.Address)
 		accountKeeper.SetAccount(ctx, acc)
-		require.NoError(t, testutil.FundAccount(bankKeeper, ctx, account.Address, initCoins))
+		require.NoError(t, testutil.FundAccount(ctx, bankKeeper, account.Address, initCoins))
 	}
 
 	return accounts

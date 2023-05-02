@@ -6,6 +6,8 @@ import (
 	"sort"
 	"testing"
 
+	"cosmossdk.io/depinject"
+	sdklog "cosmossdk.io/log"
 	"cosmossdk.io/math"
 	"github.com/stretchr/testify/require"
 
@@ -117,16 +119,19 @@ func createTestSuite(t *testing.T) suite {
 	res := suite{}
 
 	app, err := simtestutil.SetupWithConfiguration(
-		configurator.NewAppConfig(
-			configurator.ParamsModule(),
-			configurator.AuthModule(),
-			configurator.StakingModule(),
-			configurator.BankModule(),
-			configurator.AuthzModule(),
-			configurator.GovModule(),
-			configurator.CrossChainModule(),
-			configurator.ConsensusModule(),
-			configurator.DistributionModule(),
+		depinject.Configs(
+			configurator.NewAppConfig(
+				configurator.ParamsModule(),
+				configurator.AuthModule(),
+				configurator.StakingModule(),
+				configurator.BankModule(),
+				configurator.AuthzModule(),
+				configurator.GovModule(),
+				configurator.CrossChainModule(),
+				configurator.ConsensusModule(),
+				configurator.DistributionModule(),
+			),
+			depinject.Supply(sdklog.NewNopLogger()),
 		),
 		simtestutil.DefaultStartUpConfig(),
 		&res.AccountKeeper, &res.AuthzKeeper, &res.BankKeeper, &res.GovKeeper, &res.DistributionKeeper, &res.StakingKeeper,

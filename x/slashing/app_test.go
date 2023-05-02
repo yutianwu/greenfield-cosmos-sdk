@@ -5,17 +5,17 @@ import (
 	"errors"
 	"testing"
 
+	"cosmossdk.io/log"
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/prysmaticlabs/prysm/crypto/bls"
 	"github.com/stretchr/testify/require"
 
-	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
-
+	"cosmossdk.io/depinject"
 	"cosmossdk.io/math"
-
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/eth/ethsecp256k1"
+	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdktestutil "github.com/cosmos/cosmos-sdk/testutil"
 	"github.com/cosmos/cosmos-sdk/testutil/configurator"
 	"github.com/cosmos/cosmos-sdk/testutil/sims"
@@ -57,16 +57,22 @@ func TestSlashingMsgs(t *testing.T) {
 		slashingKeeper keeper.Keeper
 	)
 
-	app, err := sims.SetupWithConfiguration(configurator.NewAppConfig(
-		configurator.ParamsModule(),
-		configurator.AuthModule(),
-		configurator.AuthzModule(),
-		configurator.StakingModule(),
-		configurator.SlashingModule(),
-		configurator.TxModule(),
-		configurator.ConsensusModule(),
-		configurator.BankModule()),
+	app, err := sims.SetupWithConfiguration(
+		depinject.Configs(
+			configurator.NewAppConfig(
+				configurator.ParamsModule(),
+				configurator.AuthModule(),
+				configurator.AuthzModule(),
+				configurator.StakingModule(),
+				configurator.SlashingModule(),
+				configurator.TxModule(),
+				configurator.ConsensusModule(),
+				configurator.BankModule(),
+			),
+			depinject.Supply(log.NewNopLogger()),
+		),
 		startupCfg, &stakingKeeper, &bankKeeper, &slashingKeeper)
+	require.NoError(t, err)
 
 	baseApp := app.BaseApp
 
@@ -88,7 +94,7 @@ func TestSlashingMsgs(t *testing.T) {
 	require.NoError(t, err)
 
 	header := cmtproto.Header{ChainID: sdktestutil.DefaultChainId, Height: app.LastBlockHeight() + 1}
-	txConfig := moduletestutil.MakeTestEncodingConfig().TxConfig
+	txConfig := moduletestutil.MakeTestTxConfig()
 	_, _, err = sims.SignCheckDeliver(t, txConfig, app.BaseApp, header, []sdk.Msg{createValidatorMsg}, sdktestutil.DefaultChainId, []uint64{0}, []uint64{0}, true, true, []cryptotypes.PrivKey{priv1}, sims.SetMockHeight(app.BaseApp, 0))
 	require.NoError(t, err)
 	require.True(t, sdk.Coins{genCoin.Sub(bondCoin)}.Equal(bankKeeper.GetAllBalances(ctxCheck, addr1)))

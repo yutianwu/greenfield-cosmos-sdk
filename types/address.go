@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	errorsmod "cosmossdk.io/errors"
 	"github.com/hashicorp/golang-lru/simplelru"
@@ -91,6 +92,8 @@ var (
 	consAddrCache *simplelru.LRU
 	valAddrMu     sync.Mutex
 	valAddrCache  *simplelru.LRU
+
+	isCachingEnabled atomic.Bool
 )
 
 // sentinel errors
@@ -100,6 +103,8 @@ var (
 
 func init() {
 	var err error
+	SetAddrCacheEnabled(true)
+
 	// in total the cache size is 61k entries. Key is 32 bytes and value is around 50-70 bytes.
 	// That will make around 92 * 61k * 2 (LRU) bytes ~ 11 MB
 	if accAddrCache, err = simplelru.NewLRU(60000, nil); err != nil {
@@ -111,6 +116,16 @@ func init() {
 	if valAddrCache, err = simplelru.NewLRU(500, nil); err != nil {
 		panic(err)
 	}
+}
+
+// SetAddrCacheEnabled enables or disables accAddrCache, consAddrCache, and valAddrCache. By default, caches are enabled.
+func SetAddrCacheEnabled(enabled bool) {
+	isCachingEnabled.Store(enabled)
+}
+
+// IsAddrCacheEnabled returns if the address caches are enabled.
+func IsAddrCacheEnabled() bool {
+	return isCachingEnabled.Load()
 }
 
 // Address is a common interface for different types of addresses used by the SDK
@@ -298,11 +313,15 @@ func (aa AccAddress) String() string {
 	}
 
 	key := conv.UnsafeBytesToStr(aa)
-	accAddrMu.Lock()
-	defer accAddrMu.Unlock()
-	addr, ok := accAddrCache.Get(key)
-	if ok {
-		return addr.(string)
+
+	if IsAddrCacheEnabled() {
+		accAddrMu.Lock()
+		defer accAddrMu.Unlock()
+
+		addr, ok := accAddrCache.Get(key)
+		if ok {
+			return addr.(string)
+		}
 	}
 	return cacheAddr(aa, accAddrCache, key)
 }
@@ -432,11 +451,15 @@ func (va ValAddress) String() string {
 	}
 
 	key := conv.UnsafeBytesToStr(va)
-	valAddrMu.Lock()
-	defer valAddrMu.Unlock()
-	addr, ok := valAddrCache.Get(key)
-	if ok {
-		return addr.(string)
+
+	if IsAddrCacheEnabled() {
+		valAddrMu.Lock()
+		defer valAddrMu.Unlock()
+
+		addr, ok := valAddrCache.Get(key)
+		if ok {
+			return addr.(string)
+		}
 	}
 	return cacheAddr(va, valAddrCache, key)
 }
@@ -571,11 +594,15 @@ func (ca ConsAddress) String() string {
 	}
 
 	key := conv.UnsafeBytesToStr(ca)
-	consAddrMu.Lock()
-	defer consAddrMu.Unlock()
-	addr, ok := consAddrCache.Get(key)
-	if ok {
-		return addr.(string)
+
+	if IsAddrCacheEnabled() {
+		consAddrMu.Lock()
+		defer consAddrMu.Unlock()
+
+		addr, ok := consAddrCache.Get(key)
+		if ok {
+			return addr.(string)
+		}
 	}
 	return cacheAddr(ca, consAddrCache, key)
 }

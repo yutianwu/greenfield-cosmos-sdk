@@ -15,7 +15,7 @@ import (
 	"cosmossdk.io/x/tx/signing/textual"
 )
 
-func TestCoinsJsonTestcases(t *testing.T) {
+func TestCoinsJSONTestcases(t *testing.T) {
 	var testcases []coinsJSONTest
 	raw, err := os.ReadFile("./internal/testdata/coins.json")
 	require.NoError(t, err)

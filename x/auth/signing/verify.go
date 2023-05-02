@@ -6,23 +6,84 @@ import (
 
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 
+	signingv1beta1 "cosmossdk.io/api/cosmos/tx/signing/v1beta1"
 	errorsmod "cosmossdk.io/errors"
+	txsigning "cosmossdk.io/x/tx/signing"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/eth/ethsecp256k1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
-// VerifySignature verifies a transaction signature contained in SignatureData abstracting over different signing modes
-// and single vs multi-signatures.
-func VerifySignature(ctx context.Context, pubKey cryptotypes.PubKey, signerData SignerData, sigData signing.SignatureData, handler SignModeHandler, tx sdk.Tx) error {
-	switch data := sigData.(type) {
+// APISignModesToInternal converts a protobuf SignMode array to a signing.SignMode array.
+func APISignModesToInternal(modes []signingv1beta1.SignMode) ([]signing.SignMode, error) {
+	internalModes := make([]signing.SignMode, len(modes))
+	for i, mode := range modes {
+		internalMode, err := APISignModeToInternal(mode)
+		if err != nil {
+			return nil, err
+		}
+		internalModes[i] = internalMode
+	}
+	return internalModes, nil
+}
+
+// APISignModeToInternal converts a protobuf SignMode to a signing.SignMode.
+func APISignModeToInternal(mode signingv1beta1.SignMode) (signing.SignMode, error) {
+	switch mode {
+	case signingv1beta1.SignMode_SIGN_MODE_DIRECT:
+		return signing.SignMode_SIGN_MODE_DIRECT, nil
+	case signingv1beta1.SignMode_SIGN_MODE_LEGACY_AMINO_JSON:
+		return signing.SignMode_SIGN_MODE_LEGACY_AMINO_JSON, nil
+	case signingv1beta1.SignMode_SIGN_MODE_TEXTUAL:
+		return signing.SignMode_SIGN_MODE_TEXTUAL, nil
+	case signingv1beta1.SignMode_SIGN_MODE_DIRECT_AUX:
+		return signing.SignMode_SIGN_MODE_DIRECT_AUX, nil
+	case signingv1beta1.SignMode_SIGN_MODE_EIP_712:
+		return signing.SignMode_SIGN_MODE_EIP_712, nil
+	default:
+		return signing.SignMode_SIGN_MODE_UNSPECIFIED, fmt.Errorf("unsupported sign mode %s", mode)
+	}
+}
+
+// internalSignModeToAPI converts a signing.SignMode to a protobuf SignMode.
+func internalSignModeToAPI(mode signing.SignMode) (signingv1beta1.SignMode, error) {
+	switch mode {
+	case signing.SignMode_SIGN_MODE_DIRECT:
+		return signingv1beta1.SignMode_SIGN_MODE_DIRECT, nil
+	case signing.SignMode_SIGN_MODE_LEGACY_AMINO_JSON:
+		return signingv1beta1.SignMode_SIGN_MODE_LEGACY_AMINO_JSON, nil
+	case signing.SignMode_SIGN_MODE_TEXTUAL:
+		return signingv1beta1.SignMode_SIGN_MODE_TEXTUAL, nil
+	case signing.SignMode_SIGN_MODE_DIRECT_AUX:
+		return signingv1beta1.SignMode_SIGN_MODE_DIRECT_AUX, nil
+	case signing.SignMode_SIGN_MODE_EIP_712:
+		return signingv1beta1.SignMode_SIGN_MODE_EIP_712, nil
+	default:
+		return signingv1beta1.SignMode_SIGN_MODE_UNSPECIFIED, fmt.Errorf("unsupported sign mode %s", mode)
+	}
+}
+
+// VerifySignature verifies a transaction signature contained in SignatureData abstracting over different signing
+// modes. It differs from VerifySignature in that it uses the new txsigning.TxData interface in x/tx.
+func VerifySignature(
+	ctx context.Context,
+	pubKey cryptotypes.PubKey,
+	signerData txsigning.SignerData,
+	signatureData signing.SignatureData,
+	handler *txsigning.HandlerMap,
+	txData txsigning.TxData,
+) error {
+	switch data := signatureData.(type) {
 	case *signing.SingleSignatureData:
+		signMode, err := internalSignModeToAPI(data.SignMode)
+		if err != nil {
+			return err
+		}
 		if data.SignMode == signing.SignMode_SIGN_MODE_EIP_712 {
 			sig := data.Signature
-			sigHash, err := handler.GetSignBytes(data.SignMode, signerData, tx)
+			sigHash, err := handler.GetSignBytes(ctx, signMode, signerData, txData)
 			if err != nil {
 				return err
 			}
@@ -56,8 +117,7 @@ func VerifySignature(ctx context.Context, pubKey cryptotypes.PubKey, signerData 
 			}
 			return nil
 		}
-		// This should never happen, but we add it just for test cases.
-		signBytes, err := GetSignBytesWithContext(handler, ctx, data.SignMode, signerData, tx)
+		signBytes, err := handler.GetSignBytes(ctx, signMode, signerData, txData)
 		if err != nil {
 			return err
 		}
@@ -68,18 +128,6 @@ func VerifySignature(ctx context.Context, pubKey cryptotypes.PubKey, signerData 
 	case *signing.MultiSignatureData:
 		return fmt.Errorf("multi signature is not allowed")
 	default:
-		return fmt.Errorf("unexpected SignatureData %T", sigData)
+		return fmt.Errorf("unexpected SignatureData %T", signatureData)
 	}
-}
-
-// GetSignBytesWithContext gets the sign bytes from the sign mode handler. It
-// checks if the sign mode handler supports SignModeHandlerWithContext, in
-// which case it passes the context.Context argument. Otherwise, it fallbacks
-// to GetSignBytes.
-func GetSignBytesWithContext(h SignModeHandler, ctx context.Context, mode signing.SignMode, data SignerData, tx sdk.Tx) ([]byte, error) { //nolint:revive
-	hWithCtx, ok := h.(SignModeHandlerWithContext)
-	if ok {
-		return hWithCtx.GetSignBytesWithContext(ctx, mode, data, tx)
-	}
-	return h.GetSignBytes(mode, data, tx)
 }

@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	sdkmath "cosmossdk.io/math"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/distribution/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -106,7 +108,7 @@ func (h Hooks) AfterDelegationModified(ctx sdk.Context, delAddr, valAddr sdk.Acc
 }
 
 // record the slash event
-func (h Hooks) BeforeValidatorSlashed(ctx sdk.Context, valAddr sdk.AccAddress, fraction sdk.Dec) error {
+func (h Hooks) BeforeValidatorSlashed(ctx sdk.Context, valAddr sdk.AccAddress, fraction sdkmath.LegacyDec) error {
 	h.k.updateValidatorSlashFraction(ctx, valAddr, fraction)
 	return nil
 }

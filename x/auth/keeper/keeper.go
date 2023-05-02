@@ -2,14 +2,15 @@ package keeper
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
-	"cosmossdk.io/log"
-	gogotypes "github.com/cosmos/gogoproto/types"
+	"cosmossdk.io/collections"
 
 	"cosmossdk.io/core/address"
 	"cosmossdk.io/core/store"
 	errorsmod "cosmossdk.io/errors"
+	"cosmossdk.io/log"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
@@ -20,6 +21,9 @@ import (
 
 // AccountKeeperI is the interface contract that x/auth's keeper implements.
 type AccountKeeperI interface {
+	// todo: delete this
+	address.Codec
+
 	// Return a new account with the next account number and the specified address. Does not save the new account to the store.
 	NewAccountWithAddress(context.Context, sdk.AccAddress) sdk.AccountI
 
@@ -57,17 +61,22 @@ type AccountKeeperI interface {
 // AccountKeeper encodes/decodes accounts using the go-amino (binary)
 // encoding/decoding library.
 type AccountKeeper struct {
+	address.Codec
+
 	storeService store.KVStoreService
 	cdc          codec.BinaryCodec
 	permAddrs    map[string]types.PermissionsForAddress
 
 	// The prototypical AccountI constructor.
-	proto      func() sdk.AccountI
-	addressCdc address.Codec
+	proto func() sdk.AccountI
 
 	// the address capable of executing a MsgUpdateParams message. Typically, this
 	// should be the x/gov module account.
 	authority string
+
+	// State
+	ParamsState   collections.Item[types.Params] // NOTE: name is this because it conflicts with the Params gRPC method impl
+	AccountNumber collections.Sequence
 }
 
 var _ AccountKeeperI = &AccountKeeper{}
@@ -87,12 +96,16 @@ func NewAccountKeeper(
 		permAddrs[name] = types.NewPermissionsForAddress(name, perms)
 	}
 
+	sb := collections.NewSchemaBuilder(storeService)
+
 	return AccountKeeper{
-		storeService: storeService,
-		proto:        proto,
-		cdc:          cdc,
-		permAddrs:    permAddrs,
-		authority:    authority,
+		storeService:  storeService,
+		proto:         proto,
+		cdc:           cdc,
+		permAddrs:     permAddrs,
+		authority:     authority,
+		ParamsState:   collections.NewItem(sb, types.ParamsKey, "params", codec.CollValue[types.Params](cdc)),
+		AccountNumber: collections.NewSequence(sb, types.GlobalAccountNumberKey, "account_number"),
 	}
 }
 
@@ -129,32 +142,11 @@ func (ak AccountKeeper) GetSequence(ctx context.Context, addr sdk.AccAddress) (u
 // NextAccountNumber returns and increments the global account number counter.
 // If the global account number is not set, it initializes it with value 0.
 func (ak AccountKeeper) NextAccountNumber(ctx context.Context) uint64 {
-	var accNumber uint64
-	store := ak.storeService.OpenKVStore(ctx)
-
-	bz, err := store.Get(types.GlobalAccountNumberKey)
+	n, err := ak.AccountNumber.Next(ctx)
 	if err != nil {
-		// panics only on nil key, which should not be possible
 		panic(err)
 	}
-	if bz == nil {
-		// initialize the account numbers
-		accNumber = 0
-	} else {
-		val := gogotypes.UInt64Value{}
-
-		err := ak.cdc.Unmarshal(bz, &val)
-		if err != nil {
-			panic(err)
-		}
-
-		accNumber = val.GetValue()
-	}
-
-	bz = ak.cdc.MustMarshal(&gogotypes.UInt64Value{Value: accNumber + 1})
-	store.Set(types.GlobalAccountNumberKey, bz)
-
-	return accNumber
+	return n
 }
 
 // GetModulePermissions fetches per-module account permissions.
@@ -242,7 +234,7 @@ func (ak AccountKeeper) decodeAccount(bz []byte) sdk.AccountI {
 }
 
 // MarshalAccount protobuf serializes an Account interface
-func (ak AccountKeeper) MarshalAccount(accountI sdk.AccountI) ([]byte, error) { //nolint:interfacer
+func (ak AccountKeeper) MarshalAccount(accountI sdk.AccountI) ([]byte, error) {
 	return ak.cdc.MarshalInterface(accountI)
 }
 
@@ -255,3 +247,18 @@ func (ak AccountKeeper) UnmarshalAccount(bz []byte) (sdk.AccountI, error) {
 
 // GetCodec return codec.Codec object used by the keeper
 func (ak AccountKeeper) GetCodec() codec.BinaryCodec { return ak.cdc }
+
+// SetParams sets the auth module's parameters.
+// CONTRACT: This method performs no validation of the parameters.
+func (ak AccountKeeper) SetParams(ctx context.Context, params types.Params) error {
+	return ak.ParamsState.Set(ctx, params)
+}
+
+// GetParams gets the auth module's parameters.
+func (ak AccountKeeper) GetParams(ctx context.Context) (params types.Params) {
+	params, err := ak.ParamsState.Get(ctx)
+	if err != nil && !errors.Is(err, collections.ErrNotFound) {
+		panic(err)
+	}
+	return params
+}

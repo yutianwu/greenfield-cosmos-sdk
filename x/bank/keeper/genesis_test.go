@@ -1,6 +1,8 @@
 package keeper_test
 
 import (
+	sdkmath "cosmossdk.io/math"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/query"
 	"github.com/cosmos/cosmos-sdk/x/bank/types"
@@ -81,7 +83,7 @@ func (suite *KeeperTestSuite) TestTotalSupply() {
 		{Coins: sdk.NewCoins(sdk.NewCoin("barcoin", sdk.NewInt(1))), Address: "0x3E0139AAC906C3C2A8E29F261ae96c6B92cf6E99"},
 		{Coins: sdk.NewCoins(sdk.NewCoin("foocoin", sdk.NewInt(10)), sdk.NewCoin("barcoin", sdk.NewInt(20))), Address: "0x31c8a344DFFA9DD97CCd149266d5Ee338b229DfC"},
 	}
-	totalSupply := sdk.NewCoins(sdk.NewCoin("foocoin", sdk.NewInt(11)), sdk.NewCoin("barcoin", sdk.NewInt(21)))
+	totalSupply := sdk.NewCoins(sdk.NewCoin("foocoin", sdkmath.NewInt(11)), sdk.NewCoin("barcoin", sdkmath.NewInt(21)))
 
 	genesisSupply, _, err := suite.bankKeeper.GetPaginatedTotalSupply(suite.ctx, &query.PageRequest{Limit: query.MaxLimit})
 	suite.Require().NoError(err)
@@ -95,7 +97,7 @@ func (suite *KeeperTestSuite) TestTotalSupply() {
 	}{
 		{
 			"calculation NOT matching genesis Supply field",
-			types.NewGenesisState(defaultGenesis.Params, balances, sdk.NewCoins(sdk.NewCoin("wrongcoin", sdk.NewInt(1))), defaultGenesis.DenomMetadata, defaultGenesis.SendEnabled),
+			types.NewGenesisState(defaultGenesis.Params, balances, sdk.NewCoins(sdk.NewCoin("wrongcoin", sdkmath.NewInt(1))), defaultGenesis.DenomMetadata, defaultGenesis.SendEnabled),
 			nil, true, "genesis supply is incorrect, expected 1wrongcoin, got 21barcoin,11foocoin",
 		},
 		{
