@@ -9,7 +9,7 @@ require (
 	cosmossdk.io/math v1.0.1
 	github.com/cometbft/cometbft v0.37.3
 	github.com/cometbft/cometbft-db v0.7.0
-	github.com/cosmos/cosmos-sdk v0.47.2
+	github.com/cosmos/cosmos-sdk v0.47.3
 	github.com/golang/mock v1.6.0
 	github.com/prysmaticlabs/prysm v0.0.0-20220124113610-e26cde5e091b
 	github.com/spf13/cast v1.5.0
